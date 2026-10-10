@@ -1,0 +1,5 @@
+# Sorties de build
+build/
+*.rbxl.lock
+*.rbxlx.lock
+sourcemap.json
