@@ -2062,10 +2062,14 @@ local function addParticles(
 	name: string,
 	color: ColorSequence,
 	rate: number,
-	size: number
+	size: number,
+	zOffset: number?
 ): ParticleEmitter
 	local emitter = Instance.new("ParticleEmitter")
 	emitter.Name = name
+	-- Les particules naissent dans Root, au cœur du corps opaque : sans décalage vers la
+	-- caméra (environ le rayon du corps), la plupart restent cachées par le corps
+	emitter.ZOffset = zOffset or 0
 	emitter.Color = color
 	-- Émission lumineuse partielle : des étincelles purement additives disparaissent sur le
 	-- sol blanc des bases et sur les socles
@@ -2143,7 +2147,7 @@ local function applyRarity(ctx: Ctx, rarity, shape: Shape, footprint: number)
 		local colors = if rarity.Rainbow
 			then sequence(Rarities.RainbowColors)
 			else ColorSequence.new(rarity.Color, rarity.Color:Lerp(WHITE, 0.5))
-		addParticles(ctx.Root, "Sparkles", colors, 5 + (rarity.Tier - 4) * 6, 0.58 * ctx.Scale)
+		addParticles(ctx.Root, "Sparkles", colors, 5 + (rarity.Tier - 4) * 6, 0.58 * ctx.Scale, 1.7 * ctx.Scale)
 	end
 	if rarity.Tier >= 5 then
 		addLight(ctx.Root, if rarity.Rainbow then WHITE else rarity.Color, 1.4, 12 * ctx.Scale)
@@ -2165,7 +2169,14 @@ local function applyRarity(ctx: Ctx, rarity, shape: Shape, footprint: number)
 			)
 			rainbow(orb, i / 8)
 		end
-		local aura = addParticles(ctx.Root, "RainbowAura", sequence(Rarities.RainbowColors), 10, 0.5 * ctx.Scale)
+		local aura = addParticles(
+			ctx.Root,
+			"RainbowAura",
+			sequence(Rarities.RainbowColors),
+			10,
+			0.5 * ctx.Scale,
+			1.7 * ctx.Scale
+		)
 		aura.SpreadAngle = Vector2.new(180, 180)
 		aura.Speed = NumberRange.new(0.5, 1)
 		aura.Lifetime = NumberRange.new(1.5, 2.5)
@@ -2332,7 +2343,7 @@ local function applyMutation(ctx: Ctx, shape: Shape?, mutationId: string)
 	local colors = if mutation.GradientColors
 		then sequence(mutation.GradientColors)
 		else ColorSequence.new(mutation.Color, mutation.Accent)
-	addParticles(ctx.Root, "Aura", colors, 6 + mutation.Multiplier * 2, 0.4 * ctx.Scale)
+	addParticles(ctx.Root, "Aura", colors, 6 + mutation.Multiplier * 2, 0.4 * ctx.Scale, 1.7 * ctx.Scale)
 	-- Une seule lumière par créature : celle de la rareté (Mythique+) prend la couleur de la mutation
 	local light = ctx.Root:FindFirstChildOfClass("PointLight")
 	if light then

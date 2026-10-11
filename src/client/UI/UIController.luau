@@ -47,7 +47,7 @@ UIController.Panels = PANEL_MODULES
 local WINDOW_SIZE = Vector2.new(860, 560)
 
 local overlay: TextButton
-local window: Frame
+local window: TextButton
 local windowScale: UIScale
 local header: Frame
 local headerGradient: UIGradient
@@ -240,9 +240,14 @@ local function buildWindow(root: Frame)
 	})
 	overlay.Activated:Connect(UIController.Close)
 
-	-- Corps bleu vif, contour noir épais
-	window = UIKit.New("Frame", {
+	-- Corps bleu vif, contour noir épais. C'est un bouton (sans texte ni effet) pour
+	-- absorber les clics : un Frame les laisse passer jusqu'au fond, et un tap à côté
+	-- d'un bouton fermait la fenêtre.
+	window = UIKit.New("TextButton", {
 		Name = "Window",
+		Text = "",
+		AutoButtonColor = false,
+		Selectable = false,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 40, 0.5, 30),
 		Size = UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y),

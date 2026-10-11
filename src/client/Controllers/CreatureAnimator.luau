@@ -75,7 +75,8 @@ local function addPart(entry: Entry, part: Instance)
 	if not part:IsA("BasePart") or part == entry.Root then
 		return
 	end
-	if not entry.Moving then
+	-- L'anneau de rareté reste posé sur le socle (il ne suit pas le corps)
+	if not entry.Moving and part.Name ~= "RarityDisc" then
 		entry.Parts[part] = {
 			Part = part,
 			Offset = entry.Root.CFrame:ToObjectSpace(part.CFrame),
@@ -174,7 +175,8 @@ end
 local function bodyPose(entry: Entry, t: number): CFrame
 	local s = entry.Seed
 	if entry.Floating then
-		local hover = math.sin(t * 1.7 + s) * entry.Bounce * 0.9
+		-- Toujours au-dessus de la pose de repos : rien ne s'enfonce dans le socle
+		local hover = (math.sin(t * 1.7 + s) * 0.5 + 0.5) * entry.Bounce * 0.9
 		return CFrame.new(0, hover, 0) * CFrame.Angles(math.sin(t * 1.1 + s) * 0.05, math.sin(t * 0.8 + s) * 0.1, 0)
 	end
 	local step = math.sin(t * 2.4 + s)

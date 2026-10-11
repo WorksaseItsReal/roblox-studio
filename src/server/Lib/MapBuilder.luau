@@ -1090,7 +1090,9 @@ local function bush(parent: Instance, position: Vector3, scale: number)
 			Vector3.new(size, size * 0.8, size),
 			CFrame.new(position + Vector3.new(rand(-1.8, 1.8) * scale, size * 0.3, rand(-1.8, 1.8) * scale)),
 			if i == 2 then C.Leaves:Lerp(C.White, 0.1) else C.Leaves,
-			Enum.Material.SmoothPlastic
+			Enum.Material.SmoothPlastic,
+			-- Décor traversable : un buisson collé à un mur servirait de marchepied
+			noCollide()
 		)
 	end
 end

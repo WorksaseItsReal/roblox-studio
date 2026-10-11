@@ -97,6 +97,28 @@ function BaseDefenseService.ResetPlot(plot)
 	setBarrierVisual(plot, false)
 end
 
+-- Renvoie hors de la base tout joueur autre que le propriétaire. Appelé à l'activation
+-- puis en continu tant que la barrière est active : les murs se franchissent en
+-- grimpant (pyramide de joueurs, buissons), seule la vérification serveur fait foi.
+local function expelIntruders(plot, owner: Player?)
+	local exit = CFrame.new(plot.ShortcutLanding.Position + Vector3.new(0, 4, 0)) * plot.ShortcutLanding.CFrame.Rotation
+	for _, other in Players:GetPlayers() do
+		if other ~= owner then
+			local root = Services.CharacterService.GetRootPart(other)
+			if root and Services.MapService.IsInsidePlot(plot, root.Position) then
+				Services.CharacterService.TeleportTo(other, exit)
+				Services.NotificationService.Notify(
+					other,
+					if owner
+						then "La barrière de " .. owner.DisplayName .. " t'a expulsé !"
+						else "Cette base est protégée par une barrière !",
+					"Warning"
+				)
+			end
+		end
+	end
+end
+
 local function activate(player: Player): (boolean, string?)
 	local plot = Services.PlotService.GetPlot(player)
 	local data = Services.DataService.GetData(player)
@@ -119,21 +141,7 @@ local function activate(player: Player): (boolean, string?)
 	plot.Model:SetAttribute("BarrierCooldownEndsAt", endsAt + GameConfig.Barrier.Cooldown)
 	setBarrierVisual(plot, true)
 
-	-- Expulsion des intrus
-	local exit = CFrame.new(plot.ShortcutLanding.Position + Vector3.new(0, 4, 0)) * plot.ShortcutLanding.CFrame.Rotation
-	for _, other in Players:GetPlayers() do
-		if other ~= player then
-			local root = Services.CharacterService.GetRootPart(other)
-			if root and Services.MapService.IsInsidePlot(plot, root.Position) then
-				Services.CharacterService.TeleportTo(other, exit)
-				Services.NotificationService.Notify(
-					other,
-					"La barrière de " .. player.DisplayName .. " t'a expulsé !",
-					"Warning"
-				)
-			end
-		end
-	end
+	expelIntruders(plot, player)
 
 	local token = {}
 	activeTokens[plot] = token
@@ -152,6 +160,11 @@ end
 local function scanIntruders()
 	for _, plot in Services.MapService.GetPlots() do
 		local owner: Player? = plot.Owner
+		-- Barrière active : personne d'autre que le propriétaire ne reste dedans
+		-- (indépendant de l'amélioration Alarme)
+		if BaseDefenseService.IsBarrierActive(plot) then
+			expelIntruders(plot, owner)
+		end
 		local data = owner and Services.DataService.GetData(owner)
 		local level = if data then data.Upgrades.Alarm else 0
 		if not owner or level <= 0 then
