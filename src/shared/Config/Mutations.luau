@@ -13,9 +13,8 @@
 	créature (Body / Belly / Limb, mélangées à hauteur de Mix), donne sa couleur aux
 	accents (Accent, en plastique plein) et ajoute un effet propre (Effect). Chacune doit
 	se lire de loin sans surcharger la créature (docs/ART_DIRECTION.md, section 4) :
-	  Instable    : couleurs d'origine, deux éclairs jaunes qui jaillissent de la tête,
-	                deux éclats d'énergie en orbite
-	  Prismatique : corps arc-en-ciel animé (vif mais pas criard) + gemmes en orbite
+	  Instable    : couleurs d'origine, deux éclairs jaunes qui jaillissent de la tête
+	  Prismatique : corps arc-en-ciel animé (vif mais pas criard), sans pièce en plus
 	  Abyssal     : bioluminescence des grands fonds (bleu nuit, taches cyan lumineuses,
 	                leurre de baudroie), distinct du violet du Néant et des Épiques
 	  Céleste     : statue d'or, auréole lumineuse et ailes d'ange blanches
