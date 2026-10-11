@@ -5,9 +5,10 @@ Sur une île flottante, une faille géante (la **Rift**) libère des créatures 
 sur un long tapis rouge, entre deux rangées de bases. Les joueurs les achètent, les
 installent dans leur base pour générer de l'argent, et volent celles des autres.
 
-Style visuel : celui de la famille *Steal a Brainrot* / *Steal an Egg* (couleurs vives,
-contours noirs, polices Luckiest Guy et Fredoka One, tapis central, bases de chaque côté).
-Cahier des charges : **[docs/ART_DIRECTION.md](docs/ART_DIRECTION.md)**.
+Style visuel « propre », dans la famille *Steal a Brainrot* / *Grow a Garden* : tapis central,
+bases de chaque côté, matériaux Roblox (herbe, tissu, planches, brique), peu de néon,
+interface claire disposée comme *Grow a Garden* (3 gros boutons en haut, argent en bas à
+gauche). Cahier des charges : **[docs/ART_DIRECTION.md](docs/ART_DIRECTION.md)**.
 
 ---
 
@@ -181,23 +182,27 @@ src/client/   -> StarterPlayer.StarterPlayerScripts.Client
 
 Détail complet (palette, polices, disposition, règles) : `docs/ART_DIRECTION.md`.
 
-- **Interface** (`src/client/UI`) : fenêtres bleu vif à en-tête coloré, cartes plus claires,
-  contours noirs épais, boutons 3D avec rebord, **Luckiest Guy** (titres, boutons, montants,
-  toujours en majuscules) et **Fredoka One** (textes courants). Code couleur constant : vert =
-  argent / acheter, or = récompenses, rouge = danger / vol, bleu = navigation, violet = rare.
-  Mise à l'échelle automatique (PC, tablette, téléphone) et mode compact sur petits écrans :
-  le rail de récompenses s'écarte du bouton de saut tactile de Roblox.
+- **Interface** (`src/client/UI`), disposition *Grow a Garden* : 3 gros boutons en haut au
+  centre (**Rift** et **Ma base** téléportent, **Boutique** ouvre la boutique), tuile **Sac** en
+  haut à gauche, colonne Index / Quêtes / Rebirth / **Plus** (tiroir avec le reste) à gauche,
+  argent en bas à gauche. Fenêtres blanches à en-tête violet, texte foncé, cartes claires,
+  **Fredoka One** en casse normale (Luckiest Guy seulement pour l'argent et les
+  célébrations), contours bleu nuit. Code couleur : vert = acheter / argent, bleu = info,
+  rouge = danger, or = récompense. Rien sous le bouton de saut ni dans la zone du joystick
+  sur téléphone ; barrière, vol et vengeance n'apparaissent que quand c'est utile.
 - **Créatures** (`CreatureVisuals.luau`) : couleurs franches par dimension, gros yeux
   brillants, joues roses, silhouettes lisibles de loin, couronne dès Légendaire, traitement
   arc-en-ciel pour Secret, mutations bien distinctes. **Étiquette au-dessus de chaque
   créature** dans le style du genre : mutation, nom, rareté en dégradé, revenu par seconde,
   prix sur le tapis. Les étiquettes des bases se simplifient avec la distance.
-- **Map** (`MapBuilder.luau`) : long **tapis rouge** à bordures or et chevrons lumineux,
-  trottoirs et lampadaires, **4 bases de chaque côté** (murs couleur d'équipe, sol blanc,
-  socles blancs à anneau néon, grande arche « BASE DE {NOM} », gros bouton de verrouillage
-  rouge, **lasers rouges** quand la base est verrouillée). La **Rift** géante au nord du
-  tapis, un portail de sortie au sud, 2 classements géants à côté de la Rift. Île flottante,
-  falaises, mer de nuages, arbres et rochers autour. Plein jour franc (éclairage Future).
+- **Map** (`MapBuilder.luau`) : île en herbe (Grass), **tapis rouge en tissu** à bordures or et
+  flèches peintes, trottoirs en béton, lampadaires, **4 bases de chaque côté** (sol en
+  planches, murets en brique blanc cassé, couleur d'équipe seulement sur les chaperons,
+  l'arche et le panneau « Base de {nom} », socles blancs, lasers rouges quand la base est
+  verrouillée). La **Rift** au nord du tapis, un portail de sortie au sud, des **étals façon
+  Grow a Garden** (Boutique, Index) et 2 classements sur l'esplanade. Néon réservé à la Rift,
+  aux lampadaires et aux lasers (117 pièces). Bosquets, rochers, mer de nuages.
+  Plein jour doux (éclairage Future).
 - Pour aller plus loin : remplace les créatures procédurales par de vrais modèles 3D
   (`ReplicatedStorage.Assets.Creatures`, voir `docs/MAP_BUILD.md`). C'est le levier visuel n°1.
 
@@ -208,6 +213,7 @@ Détail complet (palette, polices, disposition, règles) : `docs/ART_DIRECTION.m
 | Étape | Où | Détail |
 |---|---|---|
 | Les créatures sortent de la Rift | `RiftService` | 1 toutes les ~3,5 s, tirage rareté puis créature (`Odds`) |
+| Aller au tapis / rentrer | `CharacterService` | Boutons **Rift** et **Ma base** en haut de l'écran (téléportation, recharge 5 s, refusée en portant une créature volée) |
 | Achat | `ShopService` | Touche **E** près d'une créature sur le chemin |
 | Trajet jusqu'à la base | `ShopService` + `ConveyorController` | Quitte le tapis, longe le trottoir, entre par l'arche puis rejoint son socle |
 | Revenus | `IncomeService` | Toutes les secondes, revenu x rebirth x index x gamepass x amis/groupe x boost |
@@ -239,7 +245,12 @@ rate limit -> profil chargé -> nombre et types d'arguments stricts -> `pcall` -
 - **Vol** : barrière, distance réelle, place libre, créature non déjà portée. Pendant le
   transport, contrôle 5 fois par seconde (mort, délai, récupération, **vitesse anormale =
   annulation**). La créature reste dans les données de la victime jusqu'à la livraison.
-- **Barrière** : la vraie protection est le refus serveur des vols ; le mur n'est qu'un visuel.
+- **Barrière** : la vraie protection est le refus serveur des vols ; tant qu'elle est active,
+  le serveur renvoie aussi dehors tout autre joueur présent dans la base (les murs se
+  franchissent en grimpant).
+- **Téléportations rapides** (boutons Rift / Ma base) : destinations fixes, recharge serveur,
+  refusées en portant une créature volée ; elles passent par `CharacterService.TeleportTo`
+  pour ne pas déclencher l'anti-téléportation du vol.
 - **Argent** : modifié uniquement par `IncomeService` (côté serveur).
 - **Récompenses** : quêtes, cadeaux (temps compté par le serveur), codes, tutoriel : tout est
   vérifié et mémorisé côté serveur (impossible de réclamer deux fois).
