@@ -17,25 +17,27 @@ gauche). Cahier des charges : **[docs/ART_DIRECTION.md](docs/ART_DIRECTION.md)**
 | Vue générale | L'île flottante |
 |---|---|
 | ![Vue générale](docs/previews/monde_vue_generale.jpg) | ![Île](docs/previews/monde_ile_flottante.jpg) |
-| **Le tapis (vue joueur)** | **La Rift et les classements** |
+| **Le tapis (vue joueur)** | **La Rift, les étals et les classements** |
 | ![Tapis](docs/previews/monde_tapis.jpg) | ![Rift](docs/previews/monde_rift.jpg) |
-| **Base verrouillée (lasers)** | **Les 40 créatures (5 dimensions)** |
-| ![Base](docs/previews/monde_base.jpg) | ![Créatures](docs/previews/creatures.jpg) |
-| **Étiquettes des créatures** | **HUD** |
-| ![Étiquettes](docs/previews/creatures_etiquettes.jpg) | ![HUD](docs/previews/ui_hud.jpg) |
+| **Étal façon Grow a Garden** | **Base verrouillée (lasers)** |
+| ![Étal](docs/previews/monde_etals.jpg) | ![Base](docs/previews/monde_base.jpg) |
+| **Les 40 créatures (5 dimensions)** | **Étiquettes des créatures** |
+| ![Créatures](docs/previews/creatures.jpg) | ![Étiquettes](docs/previews/creatures_etiquettes.jpg) |
+| **HUD (disposition Grow a Garden)** | **Tiroir « Plus »** |
+| ![HUD](docs/previews/ui_hud.jpg) | ![Tiroir](docs/previews/ui_tiroir.jpg) |
+| **Mes créatures (Sac)** | **Boutique** |
+| ![Inventaire](docs/previews/ui_inventaire.jpg) | ![Boutique](docs/previews/ui_boutique.jpg) |
 | **Quêtes du jour** | **Cadeaux de session** |
 | ![Quêtes](docs/previews/ui_quetes.jpg) | ![Cadeaux](docs/previews/ui_cadeaux.jpg) |
-| **Tutoriel guidé** | **Inventaire** |
-| ![Tutoriel](docs/previews/ui_tutoriel.jpg) | ![Inventaire](docs/previews/ui_inventaire.jpg) |
-| **Index** | **Boutique** |
-| ![Index](docs/previews/ui_index.jpg) | ![Boutique](docs/previews/ui_boutique.jpg) |
+| **Index** | **Tutoriel guidé** |
+| ![Index](docs/previews/ui_index.jpg) | ![Tutoriel](docs/previews/ui_tutoriel.jpg) |
 | **Téléphone (844×390)** | **Retour après absence** |
 | ![Téléphone](docs/previews/ui_telephone.jpg) | ![Hors ligne](docs/previews/ui_hors_ligne.jpg) |
 
 > Ces images sont des **aperçus générés hors Roblox** : rendu three.js de la géométrie exacte
-> de la map et des créatures, rendu HTML de l'arbre d'interface produit par le vrai code.
-> Le rendu dans Studio diffère (éclairage Future, matériaux, bloom), mais formes, couleurs
-> et mise en page sont fidèles.
+> de la map et des créatures (matériaux Roblox reproduits, occlusion ambiante), rendu HTML de
+> l'arbre d'interface produit par le vrai code. Le rendu dans Studio diffère (éclairage Future,
+> particules, néon), mais formes, couleurs et mise en page sont fidèles.
 
 **Visuels de la page Roblox** (dossier `marketing/`) : icône 512×512 et 3 miniatures
 1920×1080, générées à partir de la vraie map et des vraies créatures. Plan de lancement,
