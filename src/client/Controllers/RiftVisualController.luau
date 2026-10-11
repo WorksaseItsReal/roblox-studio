@@ -40,6 +40,7 @@ local shards: { BasePart } = {}
 local chevrons: { { Part: BasePart, Index: number } } = {}
 local riftCenter = Vector3.new(0, 17, 0)
 local currentDimension: string? = nil
+local stormOn = false
 
 local colorCorrection: ColorCorrectionEffect
 local atmosphere: Atmosphere
@@ -58,6 +59,21 @@ local function getOrCreate(className: string, name: string): any
 	created.Name = name
 	created.Parent = Lighting
 	return created
+end
+
+local STORM_TINT = Color3.fromRGB(255, 200, 235)
+
+-- Étalonnage (teinte, contraste, saturation) calculé en un seul endroit et appliqué
+-- en un seul tween : deux tweens concurrents sur le même effet s'annuleraient
+-- (la teinte de la dimension écrasait celle de la tempête).
+local function applyGrading(duration: number)
+	local dimension = currentDimension and Dimensions.Get(currentDimension)
+	local tint = if stormOn then STORM_TINT elseif dimension then dimension.Visual.Tint else Color3.new(1, 1, 1)
+	tween(colorCorrection, {
+		TintColor = tint,
+		Contrast = if stormOn then 0.15 else 0.05,
+		Saturation = if stormOn then 0.3 else 0.12,
+	}, duration)
 end
 
 local function applyDimension(dimensionId: string)
@@ -85,7 +101,7 @@ local function applyDimension(dimensionId: string)
 		end
 	end
 	tween(Lighting, { Ambient = visual.Ambient, OutdoorAmbient = visual.Ambient:Lerp(Color3.new(1, 1, 1), 0.35) }, 3)
-	tween(colorCorrection, { TintColor = visual.Tint }, 3)
+	applyGrading(3)
 	tween(atmosphere, { Color = visual.FogColor:Lerp(Color3.new(1, 1, 1), 0.5), Decay = visual.FogColor }, 3)
 end
 
@@ -131,7 +147,6 @@ function RiftVisualController.Start()
 	local portals = map:WaitForChild("Portals")
 
 	-- Tempête : ciel plus sombre, teinte magenta, faille et colonne qui s'emballent, éclairs
-	local stormOn = false
 	local function applyStorm(active: boolean)
 		if active == stormOn then
 			return
@@ -139,12 +154,7 @@ function RiftVisualController.Start()
 		stormOn = active
 		tween(atmosphere, { Density = if active then 0.45 else 0.28 }, 2)
 		tween(bloom, { Intensity = if active then 1.2 else 0.7 }, 2)
-		if active then
-			tween(colorCorrection, { TintColor = Color3.fromRGB(255, 200, 235), Contrast = 0.15, Saturation = 0.3 }, 2)
-		else
-			tween(colorCorrection, { Contrast = 0.05, Saturation = 0.12 }, 2)
-			currentDimension = nil -- forcera la teinte de la dimension à être réappliquée
-		end
+		applyGrading(2)
 		for _, beam in ipairs(tinted.RiftBeam or {}) do
 			tween(beam, { Transparency = if active then 0.6 else 0.86 }, 2)
 		end
@@ -155,8 +165,9 @@ function RiftVisualController.Start()
 
 	local function refresh()
 		local state = StateController.GameState
-		applyStorm(state ~= nil and state:GetAttribute("StormActive") == true)
+		-- Dimension d'abord : la tempête (si active) passe ensuite par-dessus
 		applyDimension(StateController.GetDimension())
+		applyStorm(state ~= nil and state:GetAttribute("StormActive") == true)
 	end
 	StateController.GameStateChanged:Connect(refresh)
 	refresh()

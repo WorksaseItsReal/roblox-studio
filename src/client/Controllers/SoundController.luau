@@ -41,6 +41,19 @@ function SoundController.Play(name: string, variation: number?)
 	Debris:AddItem(sound, 6)
 end
 
+-- Effets diffusés à tout le serveur (fusion, téléportation) : on ne les entend
+-- que s'ils ont lieu près de la caméra
+local HEARING_RADIUS = 90
+
+local function isNear(payload: any): boolean
+	local position = type(payload) == "table" and payload.Position
+	local camera = workspace.CurrentCamera
+	if typeof(position) ~= "Vector3" or not camera then
+		return false
+	end
+	return (camera.CFrame.Position - position).Magnitude <= HEARING_RADIUS
+end
+
 local KIND_SOUNDS = {
 	Success = "Success",
 	Error = "Error",
@@ -63,17 +76,24 @@ function SoundController.Start()
 	Remotes.GetEvent("Announce").OnClientEvent:Connect(function()
 		SoundController.Play("Announce", 0)
 	end)
-	Remotes.GetEvent("Effect").OnClientEvent:Connect(function(effectType)
+	Remotes.GetEvent("Effect").OnClientEvent:Connect(function(effectType, payload)
 		if effectType == "Celebrate" or effectType == "OfflineEarnings" then
 			SoundController.Play("Celebrate", 0)
 		elseif effectType == "Teleport" then
-			SoundController.Play("Whoosh")
+			if isNear(payload) then
+				SoundController.Play("Whoosh")
+			end
 		elseif effectType == "StealAlert" then
 			SoundController.Play("Alarm", 0)
 		elseif effectType == "Storm" then
-			SoundController.Play("Storm", 0)
+			-- Uniquement au début de la tempête (la fin est annoncée sans fracas)
+			if type(payload) == "table" and payload.Active then
+				SoundController.Play("Storm", 0)
+			end
 		elseif effectType == "Fusion" then
-			SoundController.Play("Success")
+			if isNear(payload) then
+				SoundController.Play("Success")
+			end
 		end
 	end)
 

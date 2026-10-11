@@ -78,34 +78,36 @@ function ShortcutPanel.Create(content: Frame, ctx)
 	local list = UIKit.ScrollList(unlocked, { Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 1, -52) })
 
 	local self = {} :: any
+	local cards: { { Button: any, Income: TextLabel, Player: Player } } = {}
+	local signature: string? = nil
 
-	function self.Refresh()
-		local profile = ctx.State.Profile
-		if not profile then
-			return
-		end
-		locked.Visible = not profile.ShortcutUnlocked
-		unlocked.Visible = profile.ShortcutUnlocked
-		if not profile.ShortcutUnlocked then
-			unlockButton:SetEnabled(ctx.State.GetMoney() >= GameConfig.Shortcut.UnlockCost)
-			return
-		end
-
-		local cooldown = (profile.ShortcutReadyAt or 0) - workspace:GetServerTimeNow()
-		Widgets.SetPillText(
-			costPill,
-			"💸 " .. Format.Money(Economy.GetShortcutUseCost(ctx.State.GetIncome())) .. " / voyage"
-		)
-		Widgets.SetPillText(cooldownPill, if cooldown > 0 then "⏳ " .. Format.Time(cooldown) else "✅ Prêt !")
-
-		UIKit.ClearChildren(list)
-		local count = 0
+	local function eligiblePlayers(): { Player }
+		local result = {}
 		for _, other in Players:GetPlayers() do
-			if other == Players.LocalPlayer or not other:GetAttribute("PlotId") then
-				continue
+			if other ~= Players.LocalPlayer and other:GetAttribute("PlotId") then
+				table.insert(result, other)
 			end
-			count += 1
-			local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 82), LayoutOrder = count, Parent = list })
+		end
+		return result
+	end
+
+	-- Les cartes ne sont reconstruites que si la liste des joueurs change : détruire
+	-- un bouton entre l'appui et le relâchement ferait perdre le clic.
+	local function rebuildIfNeeded()
+		local others = eligiblePlayers()
+		local ids = {}
+		for _, other in others do
+			table.insert(ids, tostring(other.UserId))
+		end
+		local newSignature = table.concat(ids, ",")
+		if newSignature == signature then
+			return
+		end
+		signature = newSignature
+		UIKit.ClearChildren(list)
+		table.clear(cards)
+		for index, other in others do
+			local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 82), LayoutOrder = index, Parent = list })
 			Widgets.Avatar(
 				other.UserId,
 				62,
@@ -119,8 +121,8 @@ function ShortcutPanel.Create(content: Frame, ctx)
 				Size = UDim2.new(1, -260, 0, 28),
 				Parent = card,
 			})
-			UIKit.Text({
-				Text = "💸 " .. Format.Income(other:GetAttribute("IncomePerSecond") or 0),
+			local income = UIKit.Text({
+				Text = "",
 				TextSize = 17,
 				TextColor3 = Theme.Money,
 				TextWrapped = false,
@@ -143,14 +145,39 @@ function ShortcutPanel.Create(content: Frame, ctx)
 					end
 				end,
 			})
-			go:SetEnabled(cooldown <= 0)
+			table.insert(cards, { Button = go, Income = income, Player = other })
 		end
-		if count == 0 then
+		if #others == 0 then
 			Widgets.Empty(list, "🏝️", "Aucun autre joueur avec une base sur ce serveur.")
 		end
 	end
 
-	-- Comptes à rebours rafraîchis chaque seconde
+	function self.Refresh()
+		local profile = ctx.State.Profile
+		if not profile then
+			return
+		end
+		locked.Visible = not profile.ShortcutUnlocked
+		unlocked.Visible = profile.ShortcutUnlocked
+		if not profile.ShortcutUnlocked then
+			unlockButton:SetEnabled(ctx.State.GetMoney() >= GameConfig.Shortcut.UnlockCost)
+			return
+		end
+
+		rebuildIfNeeded()
+		local cooldown = (profile.ShortcutReadyAt or 0) - workspace:GetServerTimeNow()
+		Widgets.SetPillText(
+			costPill,
+			"💸 " .. Format.Money(Economy.GetShortcutUseCost(ctx.State.GetIncome())) .. " / voyage"
+		)
+		Widgets.SetPillText(cooldownPill, if cooldown > 0 then "⏳ " .. Format.Time(cooldown) else "✅ Prêt !")
+		for _, card in cards do
+			card.Income.Text = "💸 " .. Format.Income(card.Player:GetAttribute("IncomePerSecond") or 0)
+			card.Button:SetEnabled(cooldown <= 0)
+		end
+	end
+
+	-- Comptes à rebours rafraîchis chaque seconde (léger : pas de reconstruction)
 	self.Tick = self.Refresh
 
 	return self

@@ -55,7 +55,13 @@ local function rootPosition(): Vector3?
 	return if root and root:IsA("BasePart") then root.Position else nil
 end
 
--- Créature du tapis la plus proche du joueur
+-- Argent du joueur (branché dans Start)
+local getMoney: () -> number = function()
+	return math.huge
+end
+
+-- Créature du tapis la plus proche que le joueur peut s'offrir
+-- (sinon la plus proche tout court : il en passera une abordable bientôt)
 local function nearestConveyorCreature(): Vector3?
 	local map = getMap()
 	local movers = map and map:FindFirstChild("Movers")
@@ -63,16 +69,23 @@ local function nearestConveyorCreature(): Vector3?
 	if not movers or not position then
 		return nil
 	end
+	local money = getMoney()
 	local best, bestDistance = nil, math.huge
+	local fallback, fallbackDistance = nil, math.huge
 	for _, model in movers:GetChildren() do
 		if model:IsA("Model") and model:GetAttribute("MoverType") == "Conveyor" and model.PrimaryPart then
 			local distance = (model.PrimaryPart.Position - position).Magnitude
-			if distance < bestDistance then
-				best, bestDistance = model.PrimaryPart.Position, distance
+			local price = model:GetAttribute("Price")
+			if type(price) == "number" and price <= money then
+				if distance < bestDistance then
+					best, bestDistance = model.PrimaryPart.Position, distance
+				end
+			elseif distance < fallbackDistance then
+				fallback, fallbackDistance = model.PrimaryPart.Position, distance
 			end
 		end
 	end
-	return best
+	return best or fallback
 end
 
 local function myPlotPosition(): Vector3?
@@ -105,6 +118,7 @@ end
 
 function TutorialController.Start(ctx)
 	local State = ctx.State
+	getMoney = State.GetMoney
 
 	-- Attend le premier instantané du profil
 	while not State.Profile do
@@ -115,7 +129,8 @@ function TutorialController.Start(ctx)
 		return
 	end
 	if profile.Stats.Bought >= 3 then
-		ctx.Net.Invoke("CompleteTutorial", "Done")
+		-- Joueur déjà lancé : tutoriel validé d'office, récompense affichée (toast)
+		ctx.Net.Request("CompleteTutorial", "Done")
 		return
 	end
 
