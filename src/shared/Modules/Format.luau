@@ -75,4 +75,32 @@ function Format.Percent(ratio: number): string
 	return "0 %"
 end
 
+-- Majuscules qui gèrent les accents français (string.upper ne traite que l'ASCII)
+local ACCENTS = {
+	["é"] = "É",
+	["è"] = "È",
+	["ê"] = "Ê",
+	["ë"] = "Ë",
+	["à"] = "À",
+	["â"] = "Â",
+	["ä"] = "Ä",
+	["î"] = "Î",
+	["ï"] = "Ï",
+	["ô"] = "Ô",
+	["ö"] = "Ö",
+	["ù"] = "Ù",
+	["û"] = "Û",
+	["ü"] = "Ü",
+	["ç"] = "Ç",
+	["œ"] = "Œ",
+	["æ"] = "Æ",
+}
+function Format.Upper(text: string): string
+	local upper = string.upper(text)
+	for lower, capital in ACCENTS do
+		upper = string.gsub(upper, lower, capital)
+	end
+	return upper
+end
+
 return Format

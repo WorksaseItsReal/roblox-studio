@@ -12,48 +12,94 @@ local Theme = require(script.Parent.Parent.Theme)
 local UIKit = require(script.Parent.Parent.UIKit)
 
 local DailyPanel = {}
-DailyPanel.Title = "Récompense quotidienne"
+DailyPanel.Title = "Cadeau quotidien"
+DailyPanel.Icon = "🎁"
+DailyPanel.Color = "Gold"
+
+local GOLD = Color3.fromRGB(255, 190, 40)
+local GREEN = Color3.fromRGB(70, 200, 100)
 
 function DailyPanel.Create(content: Frame, ctx)
-	local status = UIKit.Label({ Text = "", TextSize = 18, Size = UDim2.new(1, 0, 0, 30), Parent = content })
-	local row = UIKit.New("Frame", {
-		BackgroundTransparency = 1,
-		Position = UDim2.new(0, 0, 0, 38),
-		Size = UDim2.new(1, 0, 0, 90),
+	local status = UIKit.Text({
+		Text = "",
+		TextSize = 22,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Size = UDim2.new(1, 0, 0, 34),
 		Parent = content,
 	})
-	UIKit.List(row, Enum.FillDirection.Horizontal, 6)
+
+	local row = UIKit.New("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 54),
+		Size = UDim2.new(1, 0, 0, 170),
+		Parent = content,
+	})
+	UIKit.List(row, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
+	local cycle = #GameConfig.Daily.Rewards
 	local dayCards = {}
-	for day = 1, #GameConfig.Daily.Rewards do
-		local card = UIKit.New("Frame", {
-			BackgroundColor3 = Theme.SurfaceLight,
-			Size = UDim2.new(1 / #GameConfig.Daily.Rewards, -6, 1, 0),
+	for day = 1, cycle do
+		local holder = UIKit.New("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1 / cycle, -8, 1, 0),
 			LayoutOrder = day,
 			Parent = row,
 		})
-		UIKit.Corner(card, UDim.new(0, 8))
-		UIKit.Label({
-			Text = "Jour " .. day,
-			TextSize = 14,
+		local card = UIKit.Card({ Size = UDim2.fromScale(1, 1), Parent = holder })
+		local gradient = card:FindFirstChildOfClass("UIGradient") :: UIGradient
+		local stroke = card:FindFirstChildOfClass("UIStroke") :: UIStroke
+		UIKit.Text({
+			Text = if day == cycle then "JOUR 7 ⭐" else "JOUR " .. day,
+			TextSize = 16,
 			TextXAlignment = Enum.TextXAlignment.Center,
-			Size = UDim2.new(1, 0, 0, 24),
+			TextWrapped = false,
+			Position = UDim2.fromOffset(0, 8),
+			Size = UDim2.new(1, 0, 0, 22),
 			Parent = card,
 		})
-		local amount = UIKit.Label({
+		local icon = UIKit.Text({
+			Text = "🎁",
+			TextSize = if day == cycle then 52 else 44,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextWrapped = false,
+			Position = UDim2.fromOffset(0, 36),
+			Size = UDim2.new(1, 0, 0, 60),
+			Stroke = 0,
+			Parent = card,
+		})
+		local amount = UIKit.Text({
 			Text = "",
-			TextSize = 14,
+			TextSize = 16,
 			TextColor3 = Theme.Money,
 			TextXAlignment = Enum.TextXAlignment.Center,
-			Position = UDim2.new(0, 0, 0, 30),
-			Size = UDim2.new(1, 0, 0, 40),
+			TextWrapped = false,
+			TextScaled = true,
+			Position = UDim2.fromOffset(6, 110),
+			Size = UDim2.new(1, -12, 0, 26),
 			Parent = card,
 		})
-		dayCards[day] = { Card = card, Amount = amount }
+		UIKit.New("UITextSizeConstraint", { MaxTextSize = 18, Parent = amount })
+		dayCards[day] = { Gradient = gradient, Stroke = stroke, Icon = icon, Amount = amount }
 	end
-	local button = UIKit.Button("Réclamer", Theme.Gold, function()
-		ctx.Net.Request("ClaimDaily")
-	end, { Position = UDim2.new(0, 0, 0, 140), Size = UDim2.new(1, 0, 0, 48), TextSize = 22 })
-	button.Parent = content
+
+	local button = UIKit.Button({
+		Text = "🎁 RÉCLAMER",
+		Color = "Gold",
+		TextSize = 28,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 252),
+		Size = UDim2.fromOffset(400, 78),
+		Parent = content,
+		OnClick = function()
+			ctx.Net.Request("ClaimDaily")
+		end,
+	})
+	UIKit.Body({
+		Text = "Connecte-toi chaque jour : un jour manqué remet la série à zéro. Les montants augmentent avec tes revenus et tes rebirths.",
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Position = UDim2.fromOffset(60, 352),
+		Size = UDim2.new(1, -120, 0, 44),
+		Parent = content,
+	})
 
 	local self = {} :: any
 
@@ -68,31 +114,27 @@ function DailyPanel.Create(content: Frame, ctx)
 		local streakAlive = profile.Daily.LastDay == today - 1 or claimedToday
 		local currentStreak = if streakAlive then profile.Daily.Streak else 0
 		local nextDay = if claimedToday then currentStreak else currentStreak + 1
-		local cycle = #GameConfig.Daily.Rewards
+		local weekStart = (math.max(nextDay, 1) - 1) // cycle * cycle
 
 		for day, item in dayCards do
-			-- Jours affichés pour la semaine en cours de la série
-			local streakDay = (math.max(nextDay, 1) - 1) // cycle * cycle + day
+			local streakDay = weekStart + day
 			item.Amount.Text = Format.Money(Economy.GetDailyReward(streakDay, profile.Rebirths, ctx.State.GetIncome()))
 			local done = streakDay <= currentStreak
-			item.Card.BackgroundColor3 = if done
-				then Theme.Success
-				elseif streakDay == nextDay then Theme.Primary
-				else Theme.SurfaceLight
+			local isNext = streakDay == nextDay and not claimedToday
+			local color = if done then GREEN elseif isNext then GOLD else Theme.CardBottom
+			item.Gradient.Color = ColorSequence.new(Theme.Lighten(color, 0.25), Theme.Darken(color, 0.25))
+			item.Stroke.Color = if isNext then Color3.new(1, 1, 1) else Theme.Ink
+			item.Icon.Text = if done then "✅" elseif isNext then "🎉" else "🎁"
 		end
 
 		if claimedToday then
-			status.Text = string.format(
-				"Série : %d jour(s). Prochaine récompense dans %s",
-				currentStreak,
-				Format.Time((today + 1) * 86400 - now)
-			)
-			UIKit.SetButtonEnabled(button, false, Theme.Gold)
-			button.Text = "Déjà réclamée"
+			status.Text = string.format("🔥 Série de %d jour(s) !", currentStreak)
+			button:SetEnabled(false)
+			button:SetText("⏳ " .. Format.Time((today + 1) * 86400 - now))
 		else
-			status.Text = string.format("Série actuelle : %d jour(s). Réclame le jour %d !", currentStreak, nextDay)
-			UIKit.SetButtonEnabled(button, true, Theme.Gold)
-			button.Text = "Réclamer"
+			status.Text = string.format("Jour %d disponible !", nextDay)
+			button:SetEnabled(true)
+			button:SetText("🎁 RÉCLAMER")
 		end
 	end
 

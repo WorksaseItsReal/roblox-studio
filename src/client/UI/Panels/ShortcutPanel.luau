@@ -11,20 +11,71 @@ local Economy = require(Shared.Modules.Economy)
 local Format = require(Shared.Modules.Format)
 local Theme = require(script.Parent.Parent.Theme)
 local UIKit = require(script.Parent.Parent.UIKit)
+local Widgets = require(script.Parent.Parent.Widgets)
 
 local ShortcutPanel = {}
 ShortcutPanel.Title = "Portail de raccourci"
+ShortcutPanel.Icon = "🌠"
+ShortcutPanel.Color = "Cyan"
+
+local CYAN = Color3.fromRGB(40, 190, 230)
 
 function ShortcutPanel.Create(content: Frame, ctx)
-	local info = UIKit.Label({
-		Text = "",
-		Font = Theme.BodyFont,
-		TextSize = 15,
-		TextColor3 = Theme.TextDim,
-		Size = UDim2.new(1, 0, 0, 58),
-		Parent = content,
+	-- Écran de déblocage
+	local locked = UIKit.New("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = content })
+	UIKit.IconCircle(
+		"🌠",
+		CYAN,
+		120,
+		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Parent = locked }
+	)
+	UIKit.Text({
+		Text = "Téléporte-toi devant la base d'un adversaire !",
+		TextSize = 24,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Position = UDim2.fromOffset(20, 146),
+		Size = UDim2.new(1, -40, 0, 32),
+		Parent = locked,
 	})
-	local list = UIKit.ScrollList(content, { Position = UDim2.new(0, 0, 0, 64), Size = UDim2.new(1, 0, 1, -64) })
+	UIKit.Body({
+		Text = string.format(
+			"Chaque voyage coûte au moins %s (ou 30 s de tes revenus). Recharge : %s. Le propriétaire est prévenu de ton arrivée.",
+			Format.Money(GameConfig.Shortcut.UseCostBase),
+			Format.Time(GameConfig.Shortcut.Cooldown)
+		),
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Position = UDim2.fromOffset(60, 184),
+		Size = UDim2.new(1, -120, 0, 48),
+		Parent = locked,
+	})
+	local unlockButton = UIKit.Button({
+		Text = "🔓 DÉBLOQUER • " .. Format.Money(GameConfig.Shortcut.UnlockCost),
+		Color = "Cyan",
+		TextSize = 24,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 256),
+		Size = UDim2.fromOffset(400, 74),
+		Parent = locked,
+		OnClick = function()
+			ctx.Net.Request("UnlockShortcut")
+		end,
+	})
+
+	-- Écran d'utilisation
+	local unlocked = UIKit.New(
+		"Frame",
+		{ BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = content }
+	)
+	local top = Widgets.Row({ Size = UDim2.new(1, 0, 0, 40), Parent = unlocked }, 10)
+	local costPill = UIKit.Pill(
+		"💸 Coût",
+		Color3.fromRGB(60, 190, 90),
+		{ Parent = top, LayoutOrder = 1, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
+	)
+	local cooldownPill =
+		UIKit.Pill("✅ Prêt", CYAN, { Parent = top, LayoutOrder = 2, Size = UDim2.fromOffset(0, 36), TextSize = 17 })
+	local list = UIKit.ScrollList(unlocked, { Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 1, -52) })
 
 	local self = {} :: any
 
@@ -33,63 +84,69 @@ function ShortcutPanel.Create(content: Frame, ctx)
 		if not profile then
 			return
 		end
-		UIKit.ClearChildren(list, { "UIListLayout", "UIPadding" })
-
+		locked.Visible = not profile.ShortcutUnlocked
+		unlocked.Visible = profile.ShortcutUnlocked
 		if not profile.ShortcutUnlocked then
-			info.Text = "Téléporte-toi devant la base d'un adversaire pour voler plus vite. Le propriétaire est alerté. "
-				.. "Recharge : "
-				.. Format.Time(GameConfig.Shortcut.Cooldown)
-				.. "."
-			local button = UIKit.Button(
-				"Débloquer : " .. Format.Money(GameConfig.Shortcut.UnlockCost),
-				Theme.Primary,
-				function()
-					ctx.Net.Request("UnlockShortcut")
-				end,
-				{ Size = UDim2.new(1, 0, 0, 46) }
-			)
-			UIKit.SetButtonEnabled(button, ctx.State.GetMoney() >= GameConfig.Shortcut.UnlockCost, Theme.Primary)
-			button.Parent = list
+			unlockButton:SetEnabled(ctx.State.GetMoney() >= GameConfig.Shortcut.UnlockCost)
 			return
 		end
 
-		local cost = Economy.GetShortcutUseCost(ctx.State.GetIncome())
 		local cooldown = (profile.ShortcutReadyAt or 0) - workspace:GetServerTimeNow()
-		info.Text = string.format(
-			"Coût par utilisation : %s  •  %s",
-			Format.Money(cost),
-			if cooldown > 0 then "Recharge : " .. Format.Time(cooldown) else "Prêt !"
+		Widgets.SetPillText(
+			costPill,
+			"💸 " .. Format.Money(Economy.GetShortcutUseCost(ctx.State.GetIncome())) .. " / voyage"
 		)
+		Widgets.SetPillText(cooldownPill, if cooldown > 0 then "⏳ " .. Format.Time(cooldown) else "✅ Prêt !")
 
+		UIKit.ClearChildren(list)
 		local count = 0
 		for _, other in Players:GetPlayers() do
 			if other == Players.LocalPlayer or not other:GetAttribute("PlotId") then
 				continue
 			end
 			count += 1
-			local card = UIKit.Card(50, count)
-			card.Parent = list
-			UIKit.Label({
-				Text = string.format(
-					"%s  •  %s",
-					other.DisplayName,
-					Format.Income(other:GetAttribute("IncomePerSecond") or 0)
-				),
-				Size = UDim2.new(1, -140, 1, 0),
+			local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 82), LayoutOrder = count, Parent = list })
+			Widgets.Avatar(
+				other.UserId,
+				62,
+				{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Parent = card }
+			)
+			UIKit.Text({
+				Text = other.DisplayName,
+				TextSize = 22,
+				TextWrapped = false,
+				Position = UDim2.fromOffset(88, 10),
+				Size = UDim2.new(1, -260, 0, 28),
 				Parent = card,
 			})
-			local button = UIKit.Button("Y aller", Theme.Primary, function()
-				ctx.Net.Request("UseShortcut", other.UserId)
-			end, {
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, 0, 0.5, 0),
-				Size = UDim2.new(0, 120, 0, 34),
+			UIKit.Text({
+				Text = "💸 " .. Format.Income(other:GetAttribute("IncomePerSecond") or 0),
+				TextSize = 17,
+				TextColor3 = Theme.Money,
+				TextWrapped = false,
+				Position = UDim2.fromOffset(88, 42),
+				Size = UDim2.new(1, -260, 0, 24),
+				Parent = card,
 			})
-			UIKit.SetButtonEnabled(button, cooldown <= 0, Theme.Primary)
-			button.Parent = card
+			local go = UIKit.Button({
+				Text = "🌀 Y aller",
+				Color = "Cyan",
+				TextSize = 19,
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -12, 0.5, 0),
+				Size = UDim2.fromOffset(150, 54),
+				ZIndex = 2,
+				Parent = card,
+				OnClick = function()
+					if ctx.Net.Request("UseShortcut", other.UserId).Ok then
+						ctx.UI.Close()
+					end
+				end,
+			})
+			go:SetEnabled(cooldown <= 0)
 		end
 		if count == 0 then
-			UIKit.Label({ Text = "Aucun autre joueur avec une base.", TextColor3 = Theme.TextDim, Parent = list })
+			Widgets.Empty(list, "🏝️", "Aucun autre joueur avec une base sur ce serveur.")
 		end
 	end
 

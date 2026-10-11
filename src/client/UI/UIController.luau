@@ -1,14 +1,19 @@
 --[[
 	UIController
 	============
-	Construit toute l'interface (ScreenGui "RiftUI") : HUD, notifications et
-	une fenêtre unique qui affiche un panneau à la fois.
-	Les panneaux visibles sont rafraîchis quand les données changent.
+	Construit toute l'interface (ScreenGui "RiftUI") :
+	- un cadre racine mis à l'échelle selon la taille de l'écran (UIScale), pour
+	  que la même interface soit lisible sur PC, tablette et téléphone ;
+	- HUD, notifications ;
+	- une fenêtre unique (bandeau coloré + icône + bouton fermer) qui affiche un
+	  panneau à la fois, avec animation d'ouverture.
 ]]
 
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local Format = require(game:GetService("ReplicatedStorage").Shared.Modules.Format)
 local Theme = require(script.Parent.Theme)
 local UIKit = require(script.Parent.UIKit)
 local HUD = require(script.Parent.HUD)
@@ -29,7 +34,14 @@ local PANEL_MODULES = {
 
 local UIController = {}
 
+local WINDOW_SIZE = Vector2.new(780, 560)
+
+local overlay: TextButton
 local window: Frame
+local windowScale: UIScale
+local header: Frame
+local headerGradient: UIGradient
+local headerIcon: Frame
 local titleLabel: TextLabel
 local panels: { [string]: { Frame: Frame, Instance: any } } = {}
 local openName: string? = nil
@@ -44,20 +56,39 @@ function UIController.Close()
 	end
 	openName = nil
 	window.Visible = false
+	overlay.Visible = false
 end
 
 function UIController.Open(name: string, arg: any?)
 	local panel = panels[name]
-	if not panel then
+	local module = PANEL_MODULES[name]
+	if not panel or not module then
 		return
 	end
 	if openName and openName ~= name and panels[openName] then
 		panels[openName].Frame.Visible = false
 	end
+	local wasOpen = openName ~= nil
 	openName = name
-	titleLabel.Text = PANEL_MODULES[name].Title
+
+	-- Bandeau aux couleurs du panneau
+	local palette = Theme.Palette[module.Color or "Blue"] or Theme.Palette.Blue
+	headerGradient.Color = ColorSequence.new(palette[1], palette[2])
+	titleLabel.Text = Format.Upper(module.Title)
+	local glyph = headerIcon:FindFirstChild("Glyph") :: TextLabel
+	glyph.Text = module.Icon or "⭐"
+	local iconGradient = headerIcon:FindFirstChildOfClass("UIGradient")
+	if iconGradient then
+		iconGradient.Color = ColorSequence.new(Theme.Lighten(palette[1], 0.3), palette[2])
+	end
+
 	panel.Frame.Visible = true
 	window.Visible = true
+	overlay.Visible = true
+	if not wasOpen then
+		windowScale.Scale = 0.7
+		TweenService:Create(windowScale, TweenInfo.new(0.32, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	end
 	if panel.Instance.OnOpen then
 		panel.Instance.OnOpen(arg)
 	end
@@ -78,57 +109,144 @@ local function refreshOpen()
 	end
 end
 
+-- Échelle de l'interface selon la taille de l'écran
+local function setupScaling(root: Frame)
+	local scale = UIKit.New("UIScale", { Parent = root })
+	local function update()
+		local camera = workspace.CurrentCamera
+		local viewport = if camera then camera.ViewportSize else Theme.ReferenceSize
+		local ratio = math.min(viewport.X / Theme.ReferenceSize.X, viewport.Y / Theme.ReferenceSize.Y)
+		local value = math.clamp(ratio, 0.5, 1.3)
+		scale.Scale = value
+		-- Le cadre racine est agrandi d'autant pour toujours couvrir tout l'écran
+		root.Size = UDim2.fromScale(1 / value, 1 / value)
+	end
+	update()
+	local camera = workspace.CurrentCamera
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
+	end
+end
+
+local function buildWindow(root: Frame)
+	overlay = UIKit.New("TextButton", {
+		Name = "Overlay",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = Color3.fromRGB(10, 6, 24),
+		BackgroundTransparency = 0.45,
+		-- Déborde de la marge de sécurité du cadre racine pour couvrir tout l'écran
+		Position = UDim2.fromOffset(-60, -120),
+		Size = UDim2.new(1, 120, 1, 240),
+		Visible = false,
+		ZIndex = 20,
+		Parent = root,
+	})
+	overlay.Activated:Connect(UIController.Close)
+
+	window = UIKit.New("Frame", {
+		Name = "Window",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 40, 0.5, 30),
+		Size = UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Visible = false,
+		ZIndex = 21,
+		Parent = root,
+	})
+	windowScale = UIKit.New("UIScale", { Parent = window })
+	UIKit.Corner(window, 26)
+	UIKit.Stroke(window, 4.5)
+	UIKit.Gradient(window, Theme.PanelTop, Theme.PanelBottom)
+
+	-- Bandeau de titre
+	header = UIKit.New("Frame", {
+		Name = "Header",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Position = UDim2.fromOffset(0, 0),
+		Size = UDim2.new(1, 0, 0, 74),
+		ZIndex = 22,
+		Parent = window,
+	})
+	UIKit.Corner(header, 26)
+	UIKit.Stroke(header, 4.5)
+	headerGradient = UIKit.Gradient(header, Theme.Palette.Blue[1], Theme.Palette.Blue[2])
+	UIKit.New("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.8,
+		Position = UDim2.fromOffset(14, 6),
+		Size = UDim2.new(1, -28, 0, 22),
+		ZIndex = 23,
+		Parent = header,
+	})
+	UIKit.Corner(header:FindFirstChild("Shine") :: Instance, 12)
+	headerIcon = UIKit.IconCircle("⭐", Theme.Gold, 84, {
+		Position = UDim2.fromOffset(-22, -22),
+		ZIndex = 25,
+		Parent = header,
+	})
+	titleLabel = UIKit.Text({
+		Text = "",
+		TextSize = 34,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(78, 0),
+		Size = UDim2.new(1, -160, 1, 0),
+		Stroke = 3.5,
+		ZIndex = 24,
+		Parent = header,
+	})
+
+	local close = UIKit.Button({
+		Name = "Close",
+		Text = "✕",
+		Color = "Red",
+		TextSize = 30,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 18, 0, -18),
+		Size = UDim2.fromOffset(64, 64),
+		ZIndex = 26,
+		OnClick = UIController.Close,
+		Parent = window,
+	})
+	close.Face:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0.5, 0)
+	close.Instance:FindFirstChild("Shadow"):FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0.5, 0)
+end
+
 function UIController.Start(ctx)
 	local screen = UIKit.New("ScreenGui", {
 		Name = "RiftUI",
 		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})
+	local root = UIKit.New("Frame", {
+		Name = "Root",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Parent = screen,
+	})
+	-- Marge de sécurité (encoche des téléphones, barre Roblox en haut)
+	UIKit.Padding(root, 44, 8, 8, 8)
+	setupScaling(root)
 
 	ctx.UI = UIController
 	ctx.Toast = Notifications.Toast
 	ctx.Net.Toast = Notifications.Toast
 
-	Notifications.Create(screen)
-	HUD.Create(screen, ctx)
-
-	-- Fenêtre des panneaux
-	window = UIKit.New("Frame", {
-		Name = "Window",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.53),
-		Size = UDim2.fromScale(0.62, 0.68),
-		BackgroundColor3 = Theme.Background,
-		Visible = false,
-		ZIndex = 5,
-		Parent = screen,
-	})
-	UIKit.New("UISizeConstraint", { MinSize = Vector2.new(320, 300), MaxSize = Vector2.new(760, 560), Parent = window })
-	UIKit.Corner(window, UDim.new(0, 16))
-	UIKit.Stroke(window, Theme.Stroke, 3)
-
-	titleLabel = UIKit.Label({
-		Text = "",
-		TextSize = 26,
-		Position = UDim2.new(0, 16, 0, 8),
-		Size = UDim2.new(1, -80, 0, 36),
-		Parent = window,
-	})
-	local close = UIKit.Button("X", Theme.Danger, UIController.Close, {
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -10, 0, 10),
-		Size = UDim2.new(0, 36, 0, 36),
-	})
-	close.Parent = window
+	HUD.Create(root, ctx)
+	buildWindow(root)
+	Notifications.Create(root)
 
 	for name, module in PANEL_MODULES do
 		local frame = UIKit.New("Frame", {
 			Name = name,
 			BackgroundTransparency = 1,
-			Position = UDim2.new(0, 16, 0, 52),
-			Size = UDim2.new(1, -32, 1, -66),
+			Position = UDim2.fromOffset(22, 92),
+			Size = UDim2.new(1, -44, 1, -110),
 			Visible = false,
+			ZIndex = 22,
 			Parent = window,
 		})
 		panels[name] = { Frame = frame, Instance = module.Create(frame, ctx) }

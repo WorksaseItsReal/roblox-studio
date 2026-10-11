@@ -29,16 +29,36 @@ type PlotRecord = any
 
 local plotByPlayer: { [Player]: PlotRecord } = {}
 
-local LOCKED_SLOT_COLOR = Color3.fromRGB(45, 45, 52)
+local LOCKED_SLOT_COLOR = Color3.fromRGB(70, 68, 84)
 
 local function getPlotColor(plot: PlotRecord): Color3
-	return plot.Barrier.Color
+	local color = plot.Model:GetAttribute("PlotColor")
+	return if typeof(color) == "Color3" then color else plot.Barrier.Color
 end
 
--- Position du dessus d'un emplacement
+-- Socle débloqué : clair avec anneau lumineux ; verrouillé : sombre et translucide
+local UNLOCKED_SLOT_COLOR = Color3.fromRGB(236, 234, 246)
+local function setSlotLook(slot: BasePart, unlocked: boolean, color: Color3)
+	slot.Color = if unlocked then UNLOCKED_SLOT_COLOR else LOCKED_SLOT_COLOR
+	slot.Transparency = if unlocked then 0 else 0.5
+	local ring = slot:FindFirstChild("SlotRing")
+	if ring and ring:IsA("BasePart") then
+		ring.Color = color
+		ring.Transparency = if unlocked then 0 else 1
+	end
+end
+
+-- Dessus d'un emplacement, orienté comme la base (face à l'entrée).
+-- Fonctionne quelle que soit la forme du socle (bloc, cylindre couché...).
 function PlotService.GetSlotTop(plot: PlotRecord, slotIndex: number): CFrame
 	local slot = plot.Slots[slotIndex]
-	return CFrame.new(slot.Position + Vector3.new(0, slot.Size.Y / 2, 0)) * slot.CFrame.Rotation
+	local cf, size = slot.CFrame, slot.Size
+	local halfHeight = (
+		math.abs(cf.RightVector.Y) * size.X
+		+ math.abs(cf.UpVector.Y) * size.Y
+		+ math.abs(cf.LookVector.Y) * size.Z
+	) / 2
+	return CFrame.new(slot.Position + Vector3.new(0, halfHeight, 0)) * plot.Floor.CFrame.Rotation
 end
 
 function PlotService.GetPlot(player: Player): PlotRecord?
@@ -169,10 +189,7 @@ function PlotService.RefreshSlotPads(player: Player)
 	local maxSlots = Economy.GetMaxSlots(data, Services.MonetizationService.GetPasses(player))
 	local color = getPlotColor(plot)
 	for index, slot in plot.Slots do
-		local unlocked = index <= maxSlots
-		slot.Color = if unlocked then color else LOCKED_SLOT_COLOR
-		slot.Transparency = if unlocked then 0.15 else 0.75
-		slot.Material = if unlocked then Enum.Material.Neon else Enum.Material.SmoothPlastic
+		setSlotLook(slot, index <= maxSlots, color)
 	end
 end
 
@@ -182,9 +199,7 @@ end
 local function resetPlotVisuals(plot: PlotRecord)
 	plot.CreaturesFolder:ClearAllChildren()
 	for _, slot in plot.Slots do
-		slot.Color = LOCKED_SLOT_COLOR
-		slot.Transparency = 0.6
-		slot.Material = Enum.Material.SmoothPlastic
+		setSlotLook(slot, false, getPlotColor(plot))
 	end
 end
 

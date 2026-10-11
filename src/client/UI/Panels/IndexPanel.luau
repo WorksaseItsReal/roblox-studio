@@ -1,5 +1,5 @@
 --[[
-	IndexPanel : collection par dimension, récompenses, et chances exactes
+	IndexPanel : collection par dimension, récompenses, et chances EXACTES
 	d'apparition (dimension sélectionnée, chance serveur actuelle).
 ]]
 
@@ -14,30 +14,103 @@ local Odds = require(Shared.Modules.Odds)
 local Format = require(Shared.Modules.Format)
 local Theme = require(script.Parent.Parent.Theme)
 local UIKit = require(script.Parent.Parent.UIKit)
+local Widgets = require(script.Parent.Parent.Widgets)
 
 local IndexPanel = {}
 IndexPanel.Title = "Index des créatures"
+IndexPanel.Icon = "📖"
+IndexPanel.Color = "Teal"
 
-local TIER_TEXT = { Complete = "Complet", Perfect = "Parfait (avec Secrète)" }
+local TIERS = {
+	{ Id = "Complete", Name = "Collection complète", Icon = "🏅" },
+	{ Id = "Perfect", Name = "Parfait (avec Secrète)", Icon = "👑" },
+}
 
 function IndexPanel.Create(content: Frame, ctx)
 	local selected = Dimensions.Order[1]
 	local self = {} :: any
 
-	local tabs = UIKit.New("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), Parent = content })
-	UIKit.List(tabs, Enum.FillDirection.Horizontal, 6)
+	-- Onglets de dimension
+	local tabs = Widgets.Row({ Size = UDim2.new(1, 0, 0, 52), Parent = content }, 8)
 	local tabButtons = {}
 	for order, dimensionId in Dimensions.Order do
 		local dimension = Dimensions.Get(dimensionId)
-		local button = UIKit.Button(if dimension then dimension.Name else dimensionId, Theme.SurfaceLight, function()
-			selected = dimensionId
-			self.Refresh()
-		end, { Size = UDim2.new(0.2, -5, 1, 0), LayoutOrder = order, TextSize = 15 })
-		button.Parent = tabs
-		tabButtons[dimensionId] = button
+		tabButtons[dimensionId] = UIKit.Button({
+			Text = (Theme.DimensionIcons[dimensionId] or "") .. " " .. (if dimension
+				then dimension.Name
+				else dimensionId),
+			Color = "Dark",
+			TextSize = 17,
+			Size = UDim2.new(0.2, -7, 0, 50),
+			LayoutOrder = order,
+			Parent = tabs,
+			OnClick = function()
+				selected = dimensionId
+				self.Refresh()
+			end,
+		})
 	end
 
-	local list = UIKit.ScrollList(content, { Position = UDim2.new(0, 0, 0, 42), Size = UDim2.new(1, 0, 1, -42) })
+	local progress = UIKit.ProgressBar(
+		{ Position = UDim2.fromOffset(0, 62), Size = UDim2.new(1, 0, 0, 30), Parent = content },
+		Color3.fromRGB(80, 220, 180)
+	)
+
+	-- Récompenses
+	local rewardRow = UIKit.New("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 102),
+		Size = UDim2.new(1, 0, 0, 64),
+		Parent = content,
+	})
+	local rewards = {}
+	for i, tier in TIERS do
+		local reward = GameConfig.Index.Rewards[tier.Id]
+		local card = UIKit.Card({
+			Position = UDim2.new((i - 1) * 0.5, if i == 2 then 6 else 0, 0, 0),
+			Size = UDim2.new(0.5, -6, 1, 0),
+			Parent = rewardRow,
+		}, Theme.Gold, 0.25)
+		UIKit.Text({
+			Text = tier.Icon .. " " .. tier.Name,
+			TextSize = 16,
+			TextWrapped = false,
+			Position = UDim2.fromOffset(12, 6),
+			Size = UDim2.new(1, -140, 0, 24),
+			Parent = card,
+		})
+		UIKit.Text({
+			Text = string.format(
+				"+%s • +%d %% revenus",
+				Format.Money(reward.Money),
+				math.round(reward.IncomeBonus * 100)
+			),
+			TextSize = 15,
+			TextColor3 = Theme.Money,
+			TextWrapped = false,
+			Position = UDim2.fromOffset(12, 32),
+			Size = UDim2.new(1, -140, 0, 22),
+			Parent = card,
+		})
+		rewards[tier.Id] = UIKit.Button({
+			Text = "Réclamer",
+			Color = "Gold",
+			TextSize = 16,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(118, 46),
+			ZIndex = 2,
+			Parent = card,
+			OnClick = function()
+				ctx.Net.Request("ClaimIndexReward", selected, tier.Id)
+			end,
+		})
+	end
+
+	local grid = UIKit.ScrollGrid(content, UDim2.new(0.25, -9, 0, 122), {
+		Position = UDim2.fromOffset(0, 174),
+		Size = UDim2.new(1, 0, 1, -174),
+	})
 
 	local function isComplete(profile, tier: string): boolean
 		for _, def in Creatures.ByDimension[selected] or {} do
@@ -55,11 +128,12 @@ function IndexPanel.Create(content: Frame, ctx)
 		end
 		for dimensionId, button in tabButtons do
 			local dimension = Dimensions.Get(dimensionId)
-			button.BackgroundColor3 = if dimensionId == selected and dimension
-				then dimension.Visual.RiftColor
-				else Theme.SurfaceLight
+			if dimensionId == selected and dimension then
+				button:SetColor(Theme.PaletteFrom(dimension.Visual.RiftColor))
+			else
+				button:SetColor("Dark")
+			end
 		end
-		UIKit.ClearChildren(list, { "UIListLayout", "UIPadding" })
 
 		local defs = Creatures.ByDimension[selected] or {}
 		local found = 0
@@ -68,86 +142,70 @@ function IndexPanel.Create(content: Frame, ctx)
 				found += 1
 			end
 		end
-		local luck = ctx.State.GetLuck()
-		local dimension = Dimensions.Get(selected)
-		UIKit.Label({
-			Text = string.format(
-				"%d / %d découvertes  •  Chances par apparition en dimension %s (chance x%g)",
-				found,
-				#defs,
-				if dimension then dimension.Name else selected,
-				luck
-			),
-			Font = Theme.BodyFont,
-			TextSize = 14,
-			TextColor3 = Theme.TextDim,
-			LayoutOrder = 0,
-			Parent = list,
-		})
+		progress:SetProgress(found / math.max(1, #defs))
+		progress:SetText(string.format("%d / %d découvertes", found, #defs))
 
-		-- Récompenses
-		for order, tier in { "Complete", "Perfect" } do
-			local reward = GameConfig.Index.Rewards[tier]
-			local claimed = profile.IndexClaimed[selected .. ":" .. tier]
-			local complete = isComplete(profile, tier)
-			local card = UIKit.Card(48, order)
-			card.Parent = list
-			UIKit.Label({
-				Text = string.format(
-					"%s : +%s et +%d %% de revenus",
-					TIER_TEXT[tier],
-					Format.Money(reward.Money),
-					math.round(reward.IncomeBonus * 100)
-				),
-				TextSize = 15,
-				Size = UDim2.new(1, -140, 1, 0),
-				Parent = card,
-			})
-			local button = UIKit.Button(if claimed then "Réclamé" else "Réclamer", Theme.Gold, function()
-				ctx.Net.Request("ClaimIndexReward", selected, tier)
-			end, {
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, 0, 0.5, 0),
-				Size = UDim2.new(0, 120, 0, 32),
-			})
-			UIKit.SetButtonEnabled(button, complete and not claimed, Theme.Gold)
-			button.Parent = card
+		for _, tier in TIERS do
+			local claimed = profile.IndexClaimed[selected .. ":" .. tier.Id]
+			local button = rewards[tier.Id]
+			button:SetText(if claimed then "✅ Reçu" else "Réclamer")
+			button:SetEnabled(not claimed and isComplete(profile, tier.Id))
 		end
 
-		-- Créatures
-		for order, def in defs do
+		UIKit.ClearChildren(grid)
+		local luck = ctx.State.GetLuck()
+		local sorted = table.clone(defs)
+		table.sort(sorted, function(a, b)
+			local ra, rb = Rarities.Get(a.Rarity), Rarities.Get(b.Rarity)
+			return (ra and ra.Tier or 0) < (rb and rb.Tier or 0)
+		end)
+		for order, def in sorted do
 			local rarity = Rarities.Get(def.Rarity)
+			local color = if rarity then rarity.Color else Theme.Text
 			local known = profile.Index[def.Id] == true
-			local chance = Odds.GetCreatureChance(selected, luck, def.Id)
-			local card = UIKit.Card(52, 10 + (rarity and rarity.Tier or 0) * 10 + order)
-			card.Parent = list
-			UIKit.Label({
+			local card = UIKit.Card(
+				{ LayoutOrder = order, Parent = grid },
+				if known then color else Theme.Inset,
+				if known then 0.45 else 0.6
+			)
+			UIKit.IconCircle(
+				if known then (Theme.DimensionIcons[def.Dimension] or "🐾") else "❓",
+				if known then color else Theme.Palette.Gray[2],
+				46,
+				{
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.new(0.5, 0, 0, 6),
+					Parent = card,
+				}
+			)
+			UIKit.Text({
 				Text = if known then def.Name else "???",
-				TextColor3 = if rarity then rarity.Color else Theme.Text,
-				Size = UDim2.new(0.5, 0, 0, 22),
+				TextSize = 15,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextWrapped = false,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				Position = UDim2.fromOffset(6, 54),
+				Size = UDim2.new(1, -12, 0, 20),
 				Parent = card,
 			})
-			UIKit.Label({
-				Text = string.format(
-					"%s  •  %s  •  %s",
-					if rarity then rarity.Name else def.Rarity,
-					if known then Format.Income(def.Income) else "?",
-					if known then Format.Money(def.Price) else "?"
-				),
-				Font = Theme.BodyFont,
+			local pill = UIKit.Pill(if rarity then rarity.Name else def.Rarity, color, {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 76),
+				Size = UDim2.fromOffset(0, 20),
+				TextSize = 12,
+				Parent = card,
+			})
+			pill.ZIndex = 2
+			UIKit.Text({
+				Text = if def.Rarity == "Secret"
+					then "✨ Portail doré"
+					else "🎲 " .. Format.Percent(Odds.GetCreatureChance(selected, luck, def.Id)),
 				TextSize = 13,
-				TextColor3 = Theme.TextDim,
-				Position = UDim2.new(0, 0, 0, 22),
-				Size = UDim2.new(0.7, 0, 0, 18),
-				Parent = card,
-			})
-			UIKit.Label({
-				Text = if def.Rarity == "Secret" then "Portail doré" else Format.Percent(chance),
-				TextXAlignment = Enum.TextXAlignment.Right,
-				TextSize = 16,
-				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, 0, 0, 8),
-				Size = UDim2.new(0.3, 0, 0, 22),
+				TextColor3 = Theme.Gold,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextWrapped = false,
+				Position = UDim2.fromOffset(4, 99),
+				Size = UDim2.new(1, -8, 0, 18),
 				Parent = card,
 			})
 		end

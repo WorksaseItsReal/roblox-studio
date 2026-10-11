@@ -7,6 +7,25 @@ l'argent, et volent celles des autres.
 
 ---
 
+## Aperçu
+
+| Map | La Rift |
+|---|---|
+| ![Map](docs/previews/final_map.png) | ![Rift](docs/previews/final_rift.png) |
+| **Une base** | **Les créatures (5 dimensions)** |
+| ![Base](docs/previews/final_base.png) | ![Créatures](docs/previews/final_creatures.png) |
+| **HUD** | **Inventaire** |
+| ![HUD](docs/previews/ui_hud.png) | ![Inventaire](docs/previews/ui_inventaire.png) |
+| **Index** | **Boutique** |
+| ![Index](docs/previews/ui_index.png) | ![Boutique](docs/previews/ui_boutique.png) |
+
+> Ces images sont des **aperçus générés hors Roblox** (rendu three.js de la géométrie exacte
+> de la map et des créatures, rendu HTML de l'arbre d'interface produit par le vrai code).
+> Le rendu final dans Studio diffère (éclairage, matériaux, bloom), mais formes, couleurs et
+> mise en page sont fidèles.
+
+---
+
 ## Démarrage rapide (2 options)
 
 ### Option A : ouvrir le fichier de place (le plus simple)
@@ -97,6 +116,29 @@ src/client/   -> StarterPlayer.StarterPlayerScripts.Client
   Controllers/                État, réseau, animation du chemin, bases, visuels, effets
   UI/                         HUD, notifications, 9 panneaux (tout créé par code)
 ```
+
+---
+
+## Direction artistique
+
+- **Interface "simulateur"** (`src/client/UI`) : système de design centralisé dans `Theme.luau`
+  et `UIKit.luau` : boutons 3D (ombre, dégradé, reflet, animation d'appui), contours épais,
+  textes Fredoka One avec contour, icônes emoji, pastilles, barres de progression. Toute l'UI
+  est mise à l'échelle automatiquement (PC, tablette, téléphone) à partir d'un écran de
+  référence 1280x760.
+- **Créatures** (`CreatureVisuals.luau`) : corps arrondis (ellipsoïdes `SpecialMesh`, aucun
+  asset à publier), gros yeux brillants, un style par dimension (flamme, halo + 3e œil,
+  couronne de glace, sucette, visière cyber), couronne dès Légendaire, cornes en Mythique,
+  disque lumineux de rareté au sol, aura + particules pour les mutations. Elles "respirent"
+  dans les bases (animation locale).
+- **Map** (`MapBuilder.luau`) : île flottante (falaises, rochers suspendus, îlots à
+  l'horizon), Rift entre deux piliers de roche avec anneau dentelé, vortex en couches,
+  fissures et colonne de lumière ; tapis roulant avec chevrons lumineux animés ; bases avec
+  murets vitrés, arche d'entrée, panneau du propriétaire, socles ronds, portail de fusion.
+  Tout ce qui brille se recolore selon la dimension active.
+- Pour aller plus loin : remplacez les créatures procédurales par de vrais modèles 3D
+  (`ReplicatedStorage.Assets.Creatures`, voir `docs/MAP_BUILD.md`). C'est le levier n°1
+  pour un rendu "jeu du front page".
 
 ---
 

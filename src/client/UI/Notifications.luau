@@ -1,7 +1,7 @@
 --[[
 	Notifications
 	=============
-	- Toasts empilés en haut à droite (Notify)
+	- Toasts empilés à droite, qui glissent depuis le bord (Notify)
 	- Grande bannière centrale pour les annonces globales (Announce), en file d'attente
 ]]
 
@@ -14,42 +14,56 @@ local UIKit = require(script.Parent.UIKit)
 
 local Notifications = {}
 
-local KIND_COLORS = {
-	Info = Theme.Primary,
-	Success = Theme.Success,
-	Error = Theme.Danger,
-	Warning = Theme.Warning,
-	Steal = Color3.fromRGB(255, 40, 60),
-}
-
 local toastHolder: Frame
 local bannerFrame: Frame
+local bannerGradient: UIGradient
 local bannerTitle: TextLabel
 local bannerSubtitle: TextLabel
+local bannerScale: UIScale
 local bannerQueue = {}
 local bannerBusy = false
+local toastCounter = 0
 
 function Notifications.Toast(text: string, kind: string?)
-	local color = KIND_COLORS[kind or "Info"] or Theme.Primary
-	local toast = UIKit.New("Frame", {
-		BackgroundColor3 = Theme.Surface,
+	kind = kind or "Info"
+	local palette = Theme.Palette[Theme.KindPalette[kind] or "Blue"]
+	toastCounter += 1
+
+	-- Le cadre extérieur reste fixe dans la liste ; l'intérieur glisse depuis la droite
+	local slot = UIKit.New("Frame", {
+		Name = "Toast",
+		BackgroundTransparency = 1,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 0.05,
-		LayoutOrder = -math.floor(os.clock() * 100),
+		LayoutOrder = toastCounter, -- le plus récent en bas
 		Parent = toastHolder,
 	})
-	UIKit.Corner(toast, UDim.new(0, 10))
-	UIKit.Stroke(toast, color, 2)
-	UIKit.Padding(toast, 10)
-	UIKit.Label({
-		Text = text,
-		TextSize = if kind == "Steal" then 20 else 17,
-		TextColor3 = if kind == "Steal" then color else Theme.Text,
-		AutomaticSize = Enum.AutomaticSize.Y,
+	local toast = UIKit.New("Frame", {
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Position = UDim2.new(1.2, 0, 0, 0),
+		Parent = slot,
+	})
+	UIKit.Corner(toast, 18)
+	UIKit.Stroke(toast, 3)
+	UIKit.Gradient(toast, Color3.fromRGB(80, 66, 156), Color3.fromRGB(44, 34, 98))
+	UIKit.Padding(toast, 10, 14, 10, 62)
+	UIKit.IconCircle(Theme.KindIcons[kind] or "💬", palette[2], 44, {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, -54, 0.5, 0),
 		Parent = toast,
 	})
+	UIKit.Text({
+		Text = text,
+		TextSize = if kind == "Steal" then 19 else 17,
+		TextColor3 = if kind == "Steal" then Color3.fromRGB(255, 190, 190) else Theme.Text,
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1, 0, 0, 22),
+		Parent = toast,
+	})
+	TweenService:Create(toast, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Position = UDim2.new() }):Play()
+
 	-- Maximum 5 toasts à l'écran
 	local toasts = {}
 	for _, child in toastHolder:GetChildren() do
@@ -59,13 +73,17 @@ function Notifications.Toast(text: string, kind: string?)
 	end
 	if #toasts > 5 then
 		table.sort(toasts, function(a, b)
-			return a.LayoutOrder > b.LayoutOrder
+			return a.LayoutOrder < b.LayoutOrder
 		end)
-		toasts[1]:Destroy()
+		toasts[1]:Destroy() -- le plus ancien
 	end
+
 	task.delay(if kind == "Steal" then 7 else 4, function()
-		if toast.Parent then
-			toast:Destroy()
+		if slot.Parent then
+			local out = TweenService:Create(toast, TweenInfo.new(0.25), { Position = UDim2.new(1.2, 0, 0, 0) })
+			out:Play()
+			out.Completed:Wait()
+			slot:Destroy()
 		end
 	end)
 end
@@ -77,15 +95,17 @@ local function playNextBanner()
 	bannerBusy = true
 	local item = table.remove(bannerQueue, 1)
 	bannerTitle.Text = item.Title
-	bannerTitle.TextColor3 = item.Color
 	bannerSubtitle.Text = item.Subtitle
+	bannerGradient.Color = ColorSequence.new(Theme.Lighten(item.Color, 0.1), Theme.Darken(item.Color, 0.55))
 	bannerFrame.Visible = true
-	bannerFrame.Position = UDim2.new(0.5, 0, 0, -120)
-	TweenService
-		:Create(bannerFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Position = UDim2.new(0.5, 0, 0, 110) })
-		:Play()
-	task.delay(3.5, function()
-		local out = TweenService:Create(bannerFrame, TweenInfo.new(0.3), { Position = UDim2.new(0.5, 0, 0, -120) })
+	bannerScale.Scale = 0.3
+	TweenService:Create(bannerScale, TweenInfo.new(0.45, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+	task.delay(3.6, function()
+		local out = TweenService:Create(
+			bannerScale,
+			TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+			{ Scale = 0 }
+		)
 		out:Play()
 		out.Completed:Wait()
 		bannerFrame.Visible = false
@@ -96,60 +116,66 @@ end
 
 function Notifications.Banner(title: string, subtitle: string, color: Color3)
 	table.insert(bannerQueue, { Title = title, Subtitle = subtitle, Color = color })
-	-- On ne garde pas une file infinie
 	while #bannerQueue > 4 do
 		table.remove(bannerQueue, 1)
 	end
 	playNextBanner()
 end
 
-function Notifications.Create(screen: ScreenGui)
+function Notifications.Create(root: Frame)
+	-- En bas à droite : ne masque ni le HUD ni le bouton de fermeture des fenêtres
 	toastHolder = UIKit.New("Frame", {
 		Name = "Toasts",
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 90),
-		Size = UDim2.new(0.3, 0, 0.6, 0),
-		Parent = screen,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -18, 1, -18),
+		Size = UDim2.fromOffset(340, 520),
+		ZIndex = 30,
+		Parent = root,
 	})
-	UIKit.New(
-		"UISizeConstraint",
-		{ MinSize = Vector2.new(220, 0), MaxSize = Vector2.new(360, math.huge), Parent = toastHolder }
+	UIKit.List(
+		toastHolder,
+		Enum.FillDirection.Vertical,
+		10,
+		Enum.HorizontalAlignment.Right,
+		Enum.VerticalAlignment.Bottom
 	)
-	UIKit.List(toastHolder, Enum.FillDirection.Vertical, 6, Enum.HorizontalAlignment.Right)
 
 	bannerFrame = UIKit.New("Frame", {
 		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, -120),
-		Size = UDim2.new(0.6, 0, 0, 84),
-		BackgroundColor3 = Theme.Background,
-		BackgroundTransparency = 0.1,
+		Position = UDim2.new(0.5, 0, 0, 160),
+		Size = UDim2.fromOffset(660, 104),
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		Visible = false,
-		ZIndex = 20,
-		Parent = screen,
+		ZIndex = 40,
+		Parent = root,
 	})
-	UIKit.New("UISizeConstraint", { MaxSize = Vector2.new(640, 84), Parent = bannerFrame })
-	UIKit.Corner(bannerFrame, UDim.new(0, 14))
-	UIKit.Stroke(bannerFrame, Theme.Gold, 3)
-	bannerTitle = UIKit.Label({
+	UIKit.Corner(bannerFrame, 26)
+	UIKit.Stroke(bannerFrame, 4)
+	bannerGradient = UIKit.Gradient(bannerFrame, Color3.fromRGB(255, 200, 80), Color3.fromRGB(120, 60, 10))
+	bannerScale = UIKit.New("UIScale", { Parent = bannerFrame })
+	bannerTitle = UIKit.Text({
 		Text = "",
-		TextSize = 30,
+		TextSize = 38,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Size = UDim2.new(1, 0, 0, 42),
-		Position = UDim2.new(0, 0, 0, 6),
-		ZIndex = 21,
+		TextWrapped = false,
+		TextScaled = true,
+		Position = UDim2.fromOffset(16, 8),
+		Size = UDim2.new(1, -32, 0, 48),
+		Stroke = 3.5,
+		ZIndex = 41,
 		Parent = bannerFrame,
 	})
-	bannerSubtitle = UIKit.Label({
+	UIKit.New("UITextSizeConstraint", { MaxTextSize = 38, Parent = bannerTitle })
+	bannerSubtitle = UIKit.Text({
 		Text = "",
-		Font = Theme.BodyFont,
-		TextSize = 16,
-		TextColor3 = Theme.TextDim,
+		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Size = UDim2.new(1, -20, 0, 30),
-		Position = UDim2.new(0, 10, 0, 48),
-		ZIndex = 21,
+		Position = UDim2.fromOffset(16, 56),
+		Size = UDim2.new(1, -32, 0, 40),
+		Stroke = 2,
+		ZIndex = 41,
 		Parent = bannerFrame,
 	})
 

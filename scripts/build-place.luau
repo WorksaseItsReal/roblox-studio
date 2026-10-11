@@ -65,10 +65,36 @@ if existing then
 end
 local map = MapBuilder.Build(workspace)
 
--- Petits réglages d'ambiance par défaut
+-- Ambiance par défaut (le client l'ajuste ensuite selon la dimension)
 local lighting = game:GetService("Lighting")
-lighting.ClockTime = 15
-lighting.Brightness = 2
+lighting.ClockTime = 14.5
+lighting.Brightness = 2.6
+lighting.GlobalShadows = true
+lighting.EnvironmentDiffuseScale = 1
+lighting.EnvironmentSpecularScale = 1
+lighting.Ambient = roblox.Color3.fromRGB(110, 90, 80)
+lighting.OutdoorAmbient = roblox.Color3.fromRGB(170, 160, 175)
+local function effect(className, name, props)
+	local existing = lighting:FindFirstChild(name)
+	if existing then
+		existing:Destroy()
+	end
+	local instance = roblox.Instance.new(className)
+	instance.Name = name
+	for key, value in props do
+		instance[key] = value
+	end
+	instance.Parent = lighting
+end
+effect("BloomEffect", "RiftBloom", { Intensity = 0.7, Size = 28, Threshold = 1.6 })
+effect("ColorCorrectionEffect", "RiftColorCorrection", { Saturation = 0.12, Contrast = 0.05 })
+effect("SunRaysEffect", "SunRays", { Intensity = 0.06, Spread = 0.8 })
+effect("Atmosphere", "Atmosphere", {
+	Density = 0.28,
+	Haze = 1.2,
+	Color = roblox.Color3.fromRGB(230, 200, 190),
+	Decay = roblox.Color3.fromRGB(120, 60, 50),
+})
 
 fs.writeFile(output, roblox.serializePlace(game))
 local count = #map:GetDescendants()

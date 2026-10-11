@@ -73,7 +73,7 @@ local function updateSigns(plots: Instance)
 	for _, plot in plots:GetChildren() do
 		local sign = plot:FindFirstChild("Sign")
 		local gui = sign and sign:FindFirstChild("SignGui")
-		local label = gui and gui:FindFirstChild("Text")
+		local label = gui and gui:FindFirstChild("Text", true)
 		if label and label:IsA("TextLabel") then
 			local ownerName = plot:GetAttribute("OwnerName") or ""
 			if ownerName == "" then
@@ -81,10 +81,10 @@ local function updateSigns(plots: Instance)
 				label.TextColor3 = Color3.fromRGB(200, 200, 210)
 			elseif plot:GetAttribute("BarrierActive") then
 				local left = (plot:GetAttribute("BarrierEndsAt") or now) - now
-				label.Text = ownerName .. "  |  BARRIÈRE " .. Format.Time(left)
+				label.Text = "🛡️ " .. ownerName .. " • " .. Format.Time(left)
 				label.TextColor3 = Color3.fromRGB(255, 120, 120)
 			else
-				label.Text = "Base de " .. ownerName
+				label.Text = "🏰 Base de " .. ownerName
 				label.TextColor3 = if isMine(plot) then Color3.fromRGB(120, 255, 150) else Color3.new(1, 1, 1)
 			end
 		end

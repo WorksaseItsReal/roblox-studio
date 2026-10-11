@@ -1,6 +1,6 @@
 --[[
-	ShopPanel : boutique Robux (gamepasses + produits) et affichage des chances
-	actuelles (obligatoire dès qu'un achat Robux influence un tirage aléatoire).
+	ShopPanel : boutique Robux (gamepasses + effets de serveur) et chances actuelles
+	(obligatoire dès qu'un achat Robux influence un tirage aléatoire).
 	Le client ne fait qu'OUVRIR la fenêtre d'achat Roblox ; le serveur accorde les effets.
 ]]
 
@@ -15,23 +15,58 @@ local Odds = require(Shared.Modules.Odds)
 local Format = require(Shared.Modules.Format)
 local Theme = require(script.Parent.Parent.Theme)
 local UIKit = require(script.Parent.Parent.UIKit)
+local Widgets = require(script.Parent.Parent.Widgets)
 
 local ShopPanel = {}
 ShopPanel.Title = "Boutique"
+ShopPanel.Icon = "🛒"
+ShopPanel.Color = "Green"
 
 local player = Players.LocalPlayer
+
+local PASS_STYLE = {
+	DoubleMoney = { Icon = "💸", Color = Color3.fromRGB(70, 200, 90) },
+	VipSlots = { Icon = "⭐", Color = Color3.fromRGB(255, 190, 40) },
+	LongBarrier = { Icon = "🛡️", Color = Color3.fromRGB(255, 90, 100) },
+	Speed = { Icon = "⚡", Color = Color3.fromRGB(80, 170, 255) },
+}
 
 function ShopPanel.Create(content: Frame, ctx)
 	local list = UIKit.ScrollList(content)
 	local chosenDimension = Dimensions.Order[1]
 	local self = {} :: any
 
-	local function section(text: string, order: number)
-		UIKit.Label({ Text = text, TextSize = 20, TextColor3 = Theme.Gold, LayoutOrder = order, Parent = list })
+	local function notConfigured()
+		ctx.Toast("Article pas encore configuré (Id = 0 dans Config/Monetization).", "Error")
 	end
 
-	local function notConfigured()
-		ctx.Toast("Cet article n'est pas encore configuré (Id = 0 dans Config/Monetization).", "Error")
+	local function productCard(
+		order: number,
+		height: number,
+		icon: string,
+		color: Color3,
+		name: string,
+		description: string
+	)
+		local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, height), LayoutOrder = order, Parent = list }, color, 0.3)
+		UIKit.IconCircle(icon, color, 76, { Position = UDim2.fromOffset(14, 14), Parent = card })
+		UIKit.Text({
+			Text = name,
+			TextSize = 22,
+			TextWrapped = false,
+			Position = UDim2.fromOffset(104, 12),
+			Size = UDim2.new(1, -290, 0, 28),
+			Parent = card,
+		})
+		UIKit.Body({
+			Text = description,
+			TextColor3 = Color3.fromRGB(232, 226, 255),
+			TextYAlignment = Enum.TextYAlignment.Top,
+			Position = UDim2.fromOffset(104, 42),
+			Size = UDim2.new(1, -290, 0, 40),
+			Parent = card,
+		})
+		return card
 	end
 
 	function self.Refresh()
@@ -39,143 +74,185 @@ function ShopPanel.Create(content: Frame, ctx)
 		if not profile then
 			return
 		end
-		UIKit.ClearChildren(list, { "UIListLayout", "UIPadding" })
+		UIKit.ClearChildren(list)
 		local order = 0
-		local function nextOrder()
+		local function nextOrder(): number
 			order += 1
 			return order
 		end
 
-		section("Gamepasses", nextOrder())
-		for _, key in Monetization.PassOrder do
+		------------------------------------------------ Gamepasses (grille 2x2)
+		Widgets.Section(list, "⭐ GAMEPASSES", nextOrder())
+		local passGrid = UIKit.New("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = nextOrder(),
+			Parent = list,
+		})
+		UIKit.New("UIGridLayout", {
+			CellSize = UDim2.new(0.5, -6, 0, 164),
+			CellPadding = UDim2.fromOffset(12, 12),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = passGrid,
+		})
+		for passOrder, key in Monetization.PassOrder do
 			local pass = Monetization.GamePasses[key]
+			local style = PASS_STYLE[key] or { Icon = "⭐", Color = Theme.Gold }
 			local owned = profile.Passes[key] == true
-			local card = UIKit.Card(60, nextOrder())
-			card.Parent = list
-			UIKit.Label({ Text = pass.Name, Size = UDim2.new(1, -140, 0, 24), Parent = card })
-			UIKit.Label({
-				Text = pass.Description,
-				Font = Theme.BodyFont,
-				TextSize = 13,
-				TextColor3 = Theme.TextDim,
-				Position = UDim2.new(0, 0, 0, 24),
-				Size = UDim2.new(1, -140, 0, 20),
+			local card = UIKit.Card({ LayoutOrder = passOrder, Parent = passGrid }, style.Color, 0.35)
+			UIKit.IconCircle(style.Icon, style.Color, 64, { Position = UDim2.fromOffset(12, 12), Parent = card })
+			UIKit.Text({
+				Text = pass.Name,
+				TextSize = 21,
+				TextWrapped = false,
+				Position = UDim2.fromOffset(86, 14),
+				Size = UDim2.new(1, -96, 0, 26),
 				Parent = card,
 			})
-			local button = UIKit.Button(if owned then "Possédé" else "Acheter", Theme.Success, function()
-				if pass.Id == 0 then
-					notConfigured()
-					return
-				end
-				MarketplaceService:PromptGamePassPurchase(player, pass.Id)
-			end, {
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, 0, 0.5, 0),
-				Size = UDim2.new(0, 120, 0, 36),
+			UIKit.Body({
+				Text = pass.Description,
+				TextColor3 = Color3.fromRGB(232, 226, 255),
+				TextYAlignment = Enum.TextYAlignment.Top,
+				Position = UDim2.fromOffset(86, 42),
+				Size = UDim2.new(1, -96, 0, 38),
+				Parent = card,
 			})
-			UIKit.SetButtonEnabled(button, not owned, Theme.Success)
-			button.Parent = card
+			local button = UIKit.Button({
+				Text = if owned then "✅ Possédé" else "R$ Acheter",
+				Color = "Green",
+				TextSize = 19,
+				Position = UDim2.new(0, 12, 1, -62),
+				Size = UDim2.new(1, -24, 0, 52),
+				ZIndex = 2,
+				Parent = card,
+				OnClick = function()
+					if pass.Id == 0 then
+						notConfigured()
+						return
+					end
+					MarketplaceService:PromptGamePassPurchase(player, pass.Id)
+				end,
+			})
+			button:SetEnabled(not owned)
 		end
 
-		section("Effets de serveur", nextOrder())
+		------------------------------------------------ Effets de serveur
+		Widgets.Section(list, "⚡ EFFETS DE SERVEUR", nextOrder())
 
-		-- Forcer une dimension (avec choix)
-		local forceCard = UIKit.Card(104, nextOrder())
-		forceCard.Parent = list
 		local force = Monetization.Products.ForceDimension
-		UIKit.Label({ Text = force.Name, Size = UDim2.new(1, -140, 0, 24), Parent = forceCard })
-		UIKit.Label({
-			Text = force.Description,
-			Font = Theme.BodyFont,
-			TextSize = 13,
-			TextColor3 = Theme.TextDim,
-			Position = UDim2.new(0, 0, 0, 24),
-			Size = UDim2.new(1, -140, 0, 20),
-			Parent = forceCard,
-		})
-		local picker = UIKit.New("Frame", {
-			BackgroundTransparency = 1,
-			Position = UDim2.new(0, 0, 0, 52),
-			Size = UDim2.new(1, -140, 0, 30),
-			Parent = forceCard,
-		})
-		UIKit.List(picker, Enum.FillDirection.Horizontal, 4)
+		local forceCard =
+			productCard(nextOrder(), 158, "🌀", Color3.fromRGB(170, 90, 255), force.Name, force.Description)
+		local picker = Widgets.Row(
+			{ Position = UDim2.fromOffset(104, 100), Size = UDim2.new(1, -290, 0, 46), Parent = forceCard },
+			6
+		)
 		for i, dimensionId in Dimensions.Order do
 			local dimension = Dimensions.Get(dimensionId)
-			local selected = dimensionId == chosenDimension
-			local pick = UIKit.Button(
-				if dimension then dimension.Name else dimensionId,
-				if selected and dimension then dimension.Visual.RiftColor else Theme.Surface,
-				function()
+			local pick = UIKit.Button({
+				Text = Theme.DimensionIcons[dimensionId] or "?",
+				Color = if dimensionId == chosenDimension and dimension
+					then Theme.PaletteFrom(dimension.Visual.RiftColor)
+					else "Dark",
+				TextSize = 22,
+				Size = UDim2.fromOffset(54, 44),
+				LayoutOrder = i,
+				ZIndex = 2,
+				Parent = picker,
+				OnClick = function()
 					chosenDimension = dimensionId
 					self.Refresh()
 				end,
-				{ Size = UDim2.new(0.2, -4, 1, 0), LayoutOrder = i, TextSize = 13 }
-			)
-			pick.Parent = picker
+			})
+			local _ = pick
 		end
-		local forceButton = UIKit.Button("Acheter", Theme.Primary, function()
-			if force.Id == 0 then
-				notConfigured()
-				return
-			end
-			ctx.Net.Invoke("SetDimensionChoice", chosenDimension)
-			MarketplaceService:PromptProductPurchase(player, force.Id)
-		end, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 120, 0, 36) })
-		forceButton.Parent = forceCard
-
-		-- Pack de chance
-		local luckCard = UIKit.Card(60, nextOrder())
-		luckCard.Parent = list
-		local luck = Monetization.Products.LuckBoost
-		UIKit.Label({ Text = luck.Name, Size = UDim2.new(1, -140, 0, 24), Parent = luckCard })
-		UIKit.Label({
-			Text = luck.Description,
-			Font = Theme.BodyFont,
-			TextSize = 13,
-			TextColor3 = Theme.TextDim,
-			Position = UDim2.new(0, 0, 0, 24),
-			Size = UDim2.new(1, -140, 0, 20),
-			Parent = luckCard,
+		UIKit.Button({
+			Text = "R$ Forcer "
+				.. (if Dimensions.Get(chosenDimension) then (Dimensions.Get(chosenDimension) :: any).Name else ""),
+			Color = "Purple",
+			TextSize = 17,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -14, 0.5, 0),
+			Size = UDim2.fromOffset(170, 60),
+			ZIndex = 2,
+			Parent = forceCard,
+			OnClick = function()
+				if force.Id == 0 then
+					notConfigured()
+					return
+				end
+				ctx.Net.Invoke("SetDimensionChoice", chosenDimension)
+				MarketplaceService:PromptProductPurchase(player, force.Id)
+			end,
 		})
-		local luckButton = UIKit.Button("Acheter", Theme.Primary, function()
-			if luck.Id == 0 then
-				notConfigured()
-				return
-			end
-			MarketplaceService:PromptProductPurchase(player, luck.Id)
-		end, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 120, 0, 36) })
-		luckButton.Parent = luckCard
 
-		-- Transparence des chances
+		local luck = Monetization.Products.LuckBoost
+		local luckCard = productCard(nextOrder(), 108, "🍀", Color3.fromRGB(70, 200, 90), luck.Name, luck.Description)
+		UIKit.Button({
+			Text = "R$ Acheter",
+			Color = "Green",
+			TextSize = 19,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -14, 0.5, 0),
+			Size = UDim2.fromOffset(170, 60),
+			ZIndex = 2,
+			Parent = luckCard,
+			OnClick = function()
+				if luck.Id == 0 then
+					notConfigured()
+					return
+				end
+				MarketplaceService:PromptProductPurchase(player, luck.Id)
+			end,
+		})
+
+		------------------------------------------------ Chances (transparence)
 		local dimensionId = ctx.State.GetDimension()
 		local dimension = Dimensions.Get(dimensionId)
 		local currentLuck = ctx.State.GetLuck()
-		section("Chances d'apparition (" .. (if dimension then dimension.Name else dimensionId) .. ")", nextOrder())
+		Widgets.Section(
+			list,
+			"🎲 CHANCES ACTUELLES • " .. Format.Upper(if dimension then dimension.Name else dimensionId),
+			nextOrder()
+		)
 		local now = Odds.GetRarityChances(dimensionId, currentLuck)
 		local boosted = Odds.GetRarityChances(dimensionId, currentLuck * luck.Multiplier)
+		local oddsBox = UIKit.Inset({
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			LayoutOrder = nextOrder(),
+			Parent = list,
+		})
+		UIKit.List(oddsBox, Enum.FillDirection.Vertical, 8)
+		UIKit.Padding(oddsBox, 12)
 		for i, item in now do
-			local card = UIKit.Card(34, nextOrder())
-			card.Parent = list
-			UIKit.Label({
-				Text = string.format(
-					"%s : %s   (avec pack de chance : %s)",
-					item.Rarity.Name,
-					Format.Percent(item.Chance),
-					Format.Percent(boosted[i] and boosted[i].Chance or item.Chance)
-				),
-				TextSize = 15,
-				TextColor3 = item.Rarity.Color,
-				Size = UDim2.fromScale(1, 1),
-				Parent = card,
+			local line = UIKit.New(
+				"Frame",
+				{ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = i, Parent = oddsBox }
+			)
+			UIKit.Pill(item.Rarity.Name, item.Rarity.Color, { Size = UDim2.fromOffset(0, 28), Parent = line })
+			local bar = UIKit.ProgressBar(
+				{ Position = UDim2.fromOffset(130, 1), Size = UDim2.new(1, -330, 0, 28), Parent = line },
+				item.Rarity.Color
+			)
+			bar:SetProgress(math.max(item.Chance, 0.02))
+			bar:SetText(Format.Percent(item.Chance))
+			UIKit.Text({
+				Text = "🍀 " .. Format.Percent(boosted[i] and boosted[i].Chance or item.Chance),
+				TextSize = 16,
+				TextColor3 = Theme.Money,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				TextWrapped = false,
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, 0, 0, 0),
+				Size = UDim2.fromOffset(180, 30),
+				Parent = line,
 			})
 		end
-		UIKit.Label({
-			Text = "Les Secrètes n'apparaissent que par les portails instables dorés (le pack de chance ne les affecte pas).",
-			Font = Theme.BodyFont,
-			TextSize = 13,
-			TextColor3 = Theme.TextDim,
-			Size = UDim2.new(1, 0, 0, 34),
+		UIKit.Body({
+			Text = "🍀 = avec le pack de chance. Les Secrètes n'apparaissent que par les portails instables dorés.",
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Size = UDim2.new(1, 0, 0, 20),
 			LayoutOrder = nextOrder(),
 			Parent = list,
 		})
