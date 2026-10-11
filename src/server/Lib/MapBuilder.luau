@@ -35,6 +35,9 @@ MapBuilder.PLOT_WIDTH = 60
 MapBuilder.PLOT_DEPTH = 84
 MapBuilder.WALL_HEIGHT = 12
 MapBuilder.ISLAND_RADIUS = 300
+-- Tableaux de classement : dans l'espace entre deux bases (270° = direction -Z)
+MapBuilder.BOARD_ANGLE = math.rad(270)
+MapBuilder.BOARD_RADIUS = 165
 
 local RIFT_CENTER = Vector3.new(0, 17, 0)
 local RIFT_RADIUS = 14
@@ -75,6 +78,21 @@ local SLOT_ROWS = { -22, -13, -4, 5, 14, 23, 32 }
 ---------------------------------------------------------------------------
 -- Aides de construction
 ---------------------------------------------------------------------------
+
+-- Équivalent de CFrame.lookAt construit avec CFrame.fromMatrix.
+-- La map est « cuite » hors de Roblox par Lune (scripts/build-place.luau), dont
+-- CFrame.lookAt renvoie une orientation en miroir : ce helper donne le même
+-- résultat que Roblox dans les deux environnements. Ne pas le remplacer.
+local function lookAt(position: Vector3, target: Vector3): CFrame
+	local look = (target - position).Unit
+	local right = look:Cross(Vector3.yAxis)
+	if right.Magnitude < 1e-6 then
+		right = Vector3.xAxis
+	end
+	right = right.Unit
+	local up = right:Cross(look)
+	return CFrame.fromMatrix(position, right, up, -look)
+end
 local function make(
 	className: string,
 	parent: Instance,
@@ -477,7 +495,7 @@ local function buildRift(map: Folder)
 				rift,
 				"Crack",
 				Vector3.new(0.7 - s * 0.25, 0.1, (p1 - p0).Magnitude + 0.5),
-				CFrame.lookAt((p0 + p1) / 2, p1),
+				lookAt((p0 + p1) / 2, p1),
 				Color3.fromRGB(255, 120, 40),
 				Enum.Material.Neon,
 				noCollide()
@@ -527,13 +545,14 @@ end
 
 -- Chevron lumineux "flèche" posé sur la route, pointant dans "direction"
 local function chevron(parent: Instance, position: Vector3, direction: Vector3, index: number)
-	local base = CFrame.lookAt(position, position + direction)
+	local base = lookAt(position, position + direction)
 	for _, side in { -1, 1 } do
 		local arm = block(
 			parent,
 			"Chevron",
 			Vector3.new(0.6, 0.08, 3.4),
-			base * CFrame.new(side * 1.05, 0, 0.6) * CFrame.Angles(0, side * math.rad(-38), 0),
+			-- Les deux bras se rejoignent à l'avant (-Z local) : la pointe indique le sens de marche
+			base * CFrame.new(side * 1.05, 0, -0.6) * CFrame.Angles(0, side * math.rad(38), 0),
 			C.Glow,
 			Enum.Material.Neon,
 			noCollide()
@@ -555,7 +574,7 @@ local function buildRoad(map: Folder)
 		local theta = (i / segments) * math.pi * 2
 		local position = Vector3.new(R * math.cos(theta), 0, R * math.sin(theta))
 		local tangent = Vector3.new(-math.sin(theta), 0, math.cos(theta))
-		local cf = CFrame.lookAt(position, position + tangent)
+		local cf = lookAt(position, position + tangent)
 		block(
 			road,
 			"RoadSegment",
@@ -621,7 +640,8 @@ local function buildRoad(map: Folder)
 	end
 	local count = 6
 	for k = 0, count - 1 do
-		local z = -16 - k * (spokeLength - 4) / (count - 1)
+		-- S'arrête avant l'anneau pour ne pas chevaucher ses propres chevrons
+		local z = -16 - k * (R - ROAD_WIDTH / 2 - 19) / (count - 1)
 		chevron(road, Vector3.new(-3, y + 0.05, z), -Vector3.zAxis, k) -- sortie
 		chevron(road, Vector3.new(3, y + 0.05, z), Vector3.zAxis, count - k) -- retour
 	end
@@ -735,7 +755,7 @@ local function insideAnyPlot(position: Vector3): boolean
 	for index = 1, MapBuilder.PLOT_COUNT do
 		local angle = math.rad((index - 1) * (360 / MapBuilder.PLOT_COUNT) + 22.5)
 		local center = Vector3.new(math.cos(angle), 0, math.sin(angle)) * MapBuilder.PLOT_RADIUS
-		local localPos = CFrame.lookAt(center, Vector3.zero):PointToObjectSpace(position)
+		local localPos = lookAt(center, Vector3.zero):PointToObjectSpace(position)
 		if
 			math.abs(localPos.X) < MapBuilder.PLOT_WIDTH / 2 + 5
 			and math.abs(localPos.Z) < MapBuilder.PLOT_DEPTH / 2 + 16
@@ -760,7 +780,7 @@ local function buildDecor(map: Folder)
 		local dir = Vector3.new(math.cos(angle), 0, math.sin(angle))
 		local length = toRadius - fromRadius
 		local mid = dir * (fromRadius + length / 2)
-		local cf = CFrame.lookAt(mid, mid + dir)
+		local cf = lookAt(mid, mid + dir)
 		block(
 			decor,
 			"Walkway",
@@ -844,15 +864,186 @@ local function buildDecor(map: Folder)
 			)
 		end
 	end
+	-- Bosquets sur le pourtour de l'île (au-delà des bases)
+	local planted = 0
+	local attempts = 0
+	while planted < 36 and attempts < 400 do
+		attempts += 1
+		local angle = rand(0, math.pi * 2)
+		local radius = rand(215, 282)
+		local position = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+		if not insideAnyPlot(position) then
+			planted += 1
+			tree(decor, position, rand(0.8, 1.3))
+		end
+	end
 	-- Cristaux entre la route et les bases (hors des trajets des créatures)
 	for k = 0, 7 do
 		local angle = math.rad(k * 45)
-		crystalCluster(decor, Vector3.new(math.cos(angle) * 100, 0, math.sin(angle) * 100), PLOT_COLORS[k + 1], 1)
+		-- Pas de cristaux devant les tableaux de classement
+		if math.abs(angle - MapBuilder.BOARD_ANGLE) > 0.01 then
+			crystalCluster(decor, Vector3.new(math.cos(angle) * 100, 0, math.sin(angle) * 100), PLOT_COLORS[k + 1], 1)
+		end
 	end
 	-- Îlots flottants à l'horizon
 	for k = 0, 5 do
 		local angle = math.rad(k * 60 + 15)
 		floatingIsland(decor, Vector3.new(math.cos(angle) * 390, rand(10, 60), math.sin(angle) * 390), rand(14, 22))
+	end
+end
+
+-- Mer de nuages sous l'île : renforce l'impression d'île flottante.
+-- Des cumulus en grappes (base aplatie + bosses), répartis en anneau autour de
+-- l'île : c'est la zone visible depuis le bord et dans les vues aériennes.
+local function buildCloudSea(map: Folder)
+	local clouds = Instance.new("Folder")
+	clouds.Name = "CloudSea"
+	clouds.Parent = map
+	local props = { CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }
+	local white = Color3.fromRGB(255, 255, 255)
+	local shade = Color3.fromRGB(226, 230, 255)
+	local count = 44
+	for i = 1, count do
+		local angle = (i / count) * math.pi * 2 + rand(-0.06, 0.06)
+		local radius = if i % 2 == 0 then rand(330, 470) else rand(520, 760)
+		local center = Vector3.new(math.cos(angle) * radius, -105 - rand(0, 20), math.sin(angle) * radius)
+		local scale = rand(0.9, 1.5)
+		ellipsoid(
+			clouds,
+			"Cloud",
+			Vector3.new(150, 30, 110) * scale,
+			CFrame.new(center) * CFrame.Angles(0, rand(0, math.pi), 0),
+			shade,
+			Enum.Material.SmoothPlastic,
+			props
+		)
+		for _ = 1, 3 do
+			local offset = Vector3.new(rand(-45, 45), rand(8, 18), rand(-30, 30)) * scale
+			local diameter = rand(45, 75) * scale
+			ellipsoid(
+				clouds,
+				"Cloud",
+				Vector3.new(diameter, diameter * 0.75, diameter),
+				CFrame.new(center + offset),
+				white,
+				Enum.Material.SmoothPlastic,
+				props
+			)
+		end
+	end
+end
+
+-- Tableaux de classement géants (remplis par le client : BoardController)
+-- Placés dans l'espace entre deux bases (direction -Z), face au centre : lisibles
+-- depuis la route et l'esplanade sans jamais masquer la Rift.
+local BOARD_SIZE = Vector2.new(26, 19)
+
+local function buildBoards(map: Folder)
+	local boards = Instance.new("Folder")
+	boards.Name = "Boards"
+	boards.Parent = map
+	local definitions = {
+		{ Name = "MoneyBoard", Side = -1, Title = "💰 LES PLUS RICHES", Color = Color3.fromRGB(70, 210, 100) },
+		{ Name = "StealsBoard", Side = 1, Title = "🦹 MAÎTRES VOLEURS", Color = Color3.fromRGB(255, 90, 110) },
+	}
+	local axis = Vector3.new(math.cos(MapBuilder.BOARD_ANGLE), 0, math.sin(MapBuilder.BOARD_ANGLE))
+	-- Vecteur latéral (perpendiculaire à l'axe, dans le plan horizontal)
+	local lateral = Vector3.new(-axis.Z, 0, axis.X)
+	local centerY = 1.6 + BOARD_SIZE.Y / 2
+
+	-- Socle commun
+	local base = axis * MapBuilder.BOARD_RADIUS
+	block(
+		boards,
+		"BoardPlinth",
+		Vector3.new(BOARD_SIZE.X * 2 + 8, 1.2, 8),
+		lookAt(base + Vector3.new(0, 0.6, 0), Vector3.new(0, 0.6, 0)),
+		C.Pedestal,
+		Enum.Material.Marble
+	)
+
+	for _, def in definitions do
+		local position = base + lateral * def.Side * (BOARD_SIZE.X / 2 + 1.5) + Vector3.new(0, centerY, 0)
+		-- Face avant tournée vers le centre de la map
+		local cf = lookAt(position, Vector3.new(0, centerY, 0))
+		local panel = block(
+			boards,
+			def.Name,
+			Vector3.new(BOARD_SIZE.X, BOARD_SIZE.Y, 0.8),
+			cf,
+			Color3.fromRGB(30, 24, 52),
+			Enum.Material.SmoothPlastic
+		)
+		block(
+			boards,
+			"BoardFrame",
+			Vector3.new(BOARD_SIZE.X + 1, BOARD_SIZE.Y + 1, 0.6),
+			cf * CFrame.new(0, 0, 0.5),
+			def.Color,
+			Enum.Material.Neon,
+			noCollide()
+		)
+		for _, side in { -1, 1 } do
+			block(
+				boards,
+				"BoardPost",
+				Vector3.new(1.6, BOARD_SIZE.Y + 3, 1.6),
+				cf * CFrame.new(side * (BOARD_SIZE.X / 2 + 0.9), -1.5, 0.3),
+				C.StoneDark,
+				Enum.Material.Slate
+			)
+			ball(
+				boards,
+				"BoardLamp",
+				2.2,
+				cf * CFrame.new(side * (BOARD_SIZE.X / 2 + 0.9), BOARD_SIZE.Y / 2 + 1.2, 0.3),
+				def.Color,
+				Enum.Material.Neon,
+				noCollide()
+			)
+		end
+		pointLight(panel, def.Color, 24, 1.2)
+
+		local surface = Instance.new("SurfaceGui")
+		surface.Name = "BoardGui"
+		surface.Face = Enum.NormalId.Front
+		surface.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		surface.PixelsPerStud = 30
+		surface.LightInfluence = 0
+		local background = Instance.new("Frame")
+		background.Name = "Background"
+		background.Size = UDim2.fromScale(1, 1)
+		background.BackgroundColor3 = Color3.new(1, 1, 1)
+		background.Parent = surface
+		local gradient = Instance.new("UIGradient")
+		gradient.Color = ColorSequence.new(Color3.fromRGB(70, 56, 140), Color3.fromRGB(28, 20, 60))
+		gradient.Rotation = 90
+		gradient.Parent = background
+		local title = Instance.new("TextLabel")
+		title.Name = "Title"
+		title.BackgroundTransparency = 1
+		title.Position = UDim2.fromOffset(16, 10)
+		title.Size = UDim2.new(1, -32, 0, 78)
+		title.FontFace = Font.fromEnum(Enum.Font.FredokaOne)
+		title.TextScaled = true
+		title.TextColor3 = def.Color
+		title.Text = def.Title
+		title.Parent = background
+		local titleStroke = Instance.new("UIStroke")
+		titleStroke.Color = Color3.fromRGB(16, 10, 34)
+		titleStroke.Thickness = 4
+		titleStroke.Parent = title
+		local rows = Instance.new("Frame")
+		rows.Name = "Rows"
+		rows.BackgroundTransparency = 1
+		rows.Position = UDim2.fromOffset(24, 100)
+		rows.Size = UDim2.new(1, -48, 1, -118)
+		rows.Parent = background
+		local layout = Instance.new("UIListLayout")
+		layout.Padding = UDim.new(0, 4)
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Parent = rows
+		surface.Parent = panel
 	end
 end
 
@@ -863,7 +1054,7 @@ local function buildPlot(plots: Folder, index: number)
 	local angle = math.rad((index - 1) * (360 / MapBuilder.PLOT_COUNT) + 22.5)
 	local center = Vector3.new(math.cos(angle), 0, math.sin(angle)) * MapBuilder.PLOT_RADIUS
 	-- -Z local de la base pointe vers le centre de la map (l'entrée fait face à la Rift)
-	local plotCFrame = CFrame.lookAt(center, Vector3.zero)
+	local plotCFrame = lookAt(center, Vector3.zero)
 	local color = PLOT_COLORS[(index - 1) % #PLOT_COLORS + 1]
 	local dark = color:Lerp(Color3.fromRGB(30, 28, 44), 0.55)
 	local light = color:Lerp(Color3.new(1, 1, 1), 0.45)
@@ -1227,6 +1418,8 @@ function MapBuilder.Build(parent: Instance): Folder
 	buildRift(map)
 	buildRoad(map)
 	buildDecor(map)
+	buildCloudSea(map)
+	buildBoards(map)
 
 	local pathData = Instance.new("Configuration")
 	pathData.Name = "PathData"

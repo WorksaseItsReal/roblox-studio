@@ -42,6 +42,22 @@ local function rebirth(player: Player): (boolean, string?)
 	Services.LeaderboardService.UpdateLeaderstats(player)
 	Services.DataService.SaveSoon(player)
 
+	Services.NameTagService.Refresh(player)
+	Services.NotificationService.Effect(
+		player,
+		"Celebrate",
+		{ Color = Color3.fromRGB(255, 120, 255), Text = "REBIRTH " .. data.Rebirths }
+	)
+	Services.NotificationService.Feed(
+		string.format(
+			"%s est devenu %s (rebirth %d)",
+			player.DisplayName,
+			Economy.GetTitle(data.Rebirths).Name,
+			data.Rebirths
+		),
+		Economy.GetTitle(data.Rebirths).Color,
+		"🔁"
+	)
 	Services.NotificationService.Announce(
 		player.DisplayName .. " renaît !",
 		string.format("Rebirth %d : revenus x%.1f", data.Rebirths, Economy.GetRebirthMultiplier(data.Rebirths)),

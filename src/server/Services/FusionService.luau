@@ -64,6 +64,7 @@ local function fuse(player: Player, uidA: string, uidB: string): (boolean, strin
 	table.remove(data.Creatures, indexB)
 	a.Mutation = mutation.Id
 	data.Stats.Fusions += 1
+	Services.QuestService.RecordEvent(player, "Fuse", 1)
 
 	Services.PlotService.RemoveCreatureModel(player, uidB)
 	Services.PlotService.AddCreatureModel(player, uidA)
@@ -77,6 +78,18 @@ local function fuse(player: Player, uidA: string, uidB: string): (boolean, strin
 
 	local def = Creatures.Get(a.Id)
 	local name = if def then def.Name else a.Id
+	Services.NotificationService.Effect(
+		player,
+		"Celebrate",
+		{ Color = mutation.Color, Text = mutation.Name .. " x" .. mutation.Multiplier }
+	)
+	if mutation.Multiplier >= 3 then
+		Services.NotificationService.Feed(
+			string.format("%s a fusionné un %s %s (x%d)", player.DisplayName, name, mutation.Name, mutation.Multiplier),
+			mutation.Color,
+			"🌀"
+		)
+	end
 	if mutation.Multiplier >= 4 then
 		Services.NotificationService.Announce(
 			"Fusion " .. mutation.Name .. " !",

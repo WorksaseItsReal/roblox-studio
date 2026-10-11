@@ -84,12 +84,18 @@ local function createTemplate()
 		Index = {}, -- [creatureId] = true
 		IndexClaimed = {}, -- ["Lava:Complete"] = true
 		Daily = { LastDay = -1, Streak = 0 },
-		Stats = { Steals = 0, TimesRobbed = 0, Fusions = 0, Bought = 0 },
+		Stats = { Steals = 0, TimesRobbed = 0, Fusions = 0, Bought = 0, Recovered = 0 },
 		OwnedPasses = {}, -- cache de possession des gamepasses
 		ProcessedReceipts = {}, -- PurchaseId déjà traités (idempotence Robux)
 		UnknownCreatures = {}, -- créatures retirées de la config : conservées, jamais supprimées
 		FirstJoin = os.time(),
 		LastJoin = os.time(),
+		LastSeen = 0, -- dernier instant connu en jeu (gains hors ligne)
+		LastIncome = 0, -- revenu de base à ce moment-là
+		TutorialDone = false,
+		Quests = { Day = -1, List = {}, BonusClaimed = false },
+		RedeemedCodes = {}, -- [CODE] = true
+		Boosts = { MoneyUntil = 0 }, -- fin du boost Argent x2 (os.time)
 	}
 end
 

@@ -5,6 +5,11 @@
 	utilisation coûte max(1000$, 30 s de revenus) avec une recharge de 120 s.
 	Le joueur est téléporté DEVANT la base visée (hors barrière) et le
 	propriétaire reçoit une alerte. Interdit en portant une créature volée.
+
+	Vengeance : juste après s'être fait voler, la victime peut se téléporter
+	chez SON voleur gratuitement, sans recharge et même sans avoir débloqué le
+	portail (GameConfig.Revenge). Ça transforme la frustration en action, et
+	crée les meilleurs moments de jeu à partager.
 ]]
 
 local Players = game:GetService("Players")
@@ -20,9 +25,37 @@ local ShortcutService = {}
 
 local Services
 local readyAt: { [Player]: number } = {}
+local revenges: { [Player]: { Thief: Player, ExpiresAt: number } } = {}
 
 function ShortcutService.GetReadyAt(player: Player): number
 	return readyAt[player] or 0
+end
+
+function ShortcutService.GrantRevenge(victim: Player, thief: Player)
+	revenges[victim] = { Thief = thief, ExpiresAt = os.clock() + GameConfig.Revenge.WindowSeconds }
+	Services.NotificationService.Notify(
+		victim,
+		string.format(
+			"⚔️ VENGEANCE ! Téléporte-toi GRATUITEMENT chez %s (%ds)",
+			thief.DisplayName,
+			GameConfig.Revenge.WindowSeconds
+		),
+		"Warning"
+	)
+	Services.SyncService.Push(victim)
+end
+
+-- Infos pour l'interface (nil si aucune vengeance en cours)
+function ShortcutService.GetRevengeInfo(player: Player)
+	local revenge = revenges[player]
+	if not revenge or os.clock() > revenge.ExpiresAt or revenge.Thief.Parent == nil then
+		return nil
+	end
+	return {
+		ThiefUserId = revenge.Thief.UserId,
+		ThiefName = revenge.Thief.DisplayName,
+		SecondsLeft = revenge.ExpiresAt - os.clock(),
+	}
 end
 
 local function unlock(player: Player): (boolean, string?)
@@ -42,11 +75,13 @@ end
 
 local function use(player: Player, targetUserId: number): (boolean, string?)
 	local data = Services.DataService.GetData(player)
-	if not data.ShortcutUnlocked then
+	local revenge = ShortcutService.GetRevengeInfo(player)
+	local isRevenge = revenge ~= nil and revenge.ThiefUserId == targetUserId
+	if not data.ShortcutUnlocked and not isRevenge then
 		return false, "Débloque d'abord le portail de raccourci."
 	end
 	local now = workspace:GetServerTimeNow()
-	if now < ShortcutService.GetReadyAt(player) then
+	if now < ShortcutService.GetReadyAt(player) and not isRevenge then
 		return false, "Recharge : " .. Format.Time(ShortcutService.GetReadyAt(player) - now)
 	end
 	if Services.StealService.IsCarrying(player) then
@@ -65,12 +100,21 @@ local function use(player: Player, targetUserId: number): (boolean, string?)
 		return false, "Ce joueur n'a pas de base."
 	end
 
-	local cost = Economy.GetShortcutUseCost(Services.IncomeService.GetIncome(player))
+	local cost = if isRevenge then 0 else Economy.GetShortcutUseCost(Services.IncomeService.GetIncome(player))
 	if not Services.IncomeService.TrySpend(player, cost) then
 		return false, "Il te faut " .. Format.Money(cost) .. "."
 	end
 
-	readyAt[player] = now + GameConfig.Shortcut.Cooldown
+	if isRevenge then
+		revenges[player] = nil
+		Services.NotificationService.Feed(
+			string.format("%s part se venger de %s !", player.DisplayName, target.DisplayName),
+			Color3.fromRGB(255, 90, 90),
+			"⚔️"
+		)
+	else
+		readyAt[player] = now + GameConfig.Shortcut.Cooldown
+	end
 	local landing = plot.ShortcutLanding
 	local offset = Vector3.new(math.random(-3, 3), 4, math.random(-3, 3))
 	Services.CharacterService.TeleportTo(player, CFrame.new(landing.Position + offset) * landing.CFrame.Rotation)
@@ -82,6 +126,9 @@ local function use(player: Player, targetUserId: number): (boolean, string?)
 		"Warning"
 	)
 	Services.SyncService.Push(player)
+	if isRevenge then
+		return true, "⚔️ Vengeance ! Récupère ce qui t'appartient !"
+	end
 	return true, "Téléporté devant la base de " .. target.DisplayName .. " (" .. Format.Money(cost) .. ")"
 end
 
@@ -94,6 +141,7 @@ function ShortcutService.Start()
 	Guard.BindFunction("UseShortcut", { Args = { Guard.T.Integer(1, 2 ^ 53) } }, use)
 	Players.PlayerRemoving:Connect(function(player: Player)
 		readyAt[player] = nil
+		revenges[player] = nil
 	end)
 end
 

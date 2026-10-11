@@ -150,6 +150,9 @@ function ShortcutPanel.Create(content: Frame, ctx)
 		end
 	end
 
+	-- Comptes à rebours rafraîchis chaque seconde
+	self.Tick = self.Refresh
+
 	return self
 end
 

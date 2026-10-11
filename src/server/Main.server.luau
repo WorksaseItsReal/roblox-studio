@@ -39,6 +39,13 @@ local ORDER = {
 	"IndexService",
 	"DailyRewardService",
 	"LeaderboardService",
+	"RewardService",
+	"SocialBonusService",
+	"QuestService",
+	"PlaytimeService",
+	"CodesService",
+	"TutorialService",
+	"NameTagService",
 }
 
 local Services = {}

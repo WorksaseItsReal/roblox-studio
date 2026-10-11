@@ -65,26 +65,79 @@ function Economy.GetIndexBonus(data): number
 	return bonus
 end
 
+-- Bonus temporaires / sociaux calculés par le serveur
+export type Bonus = {
+	Friends: number?, -- nombre d'amis présents sur le serveur
+	InGroup: boolean?, -- membre du groupe Roblox du jeu
+	Boost: boolean?, -- boost "Argent x2" actif
+}
+
+function Economy.GetFriendBonus(friends: number): number
+	local social = GameConfig.Social
+	return math.min(friends * social.FriendBonusPerFriend, social.FriendBonusMax)
+end
+
 -- Multiplicateur global appliqué à tous les revenus du joueur
-function Economy.GetGlobalMultiplier(data, passes: Passes): number
+function Economy.GetGlobalMultiplier(data, passes: Passes, bonus: Bonus?): number
 	local multiplier = Economy.GetRebirthMultiplier(data.Rebirths)
 	multiplier *= 1 + Economy.GetIndexBonus(data)
 	if passes.DoubleMoney then
 		multiplier *= 2
 	end
+	if bonus then
+		multiplier *= 1 + Economy.GetFriendBonus(bonus.Friends or 0)
+		if bonus.InGroup then
+			multiplier *= 1 + GameConfig.Social.GroupBonus
+		end
+		if bonus.Boost then
+			multiplier *= GameConfig.Boosts.MoneyMultiplier
+		end
+	end
 	return multiplier
 end
 
--- Revenu total par seconde. "excluded" = Uids actuellement portés par un voleur
--- (une créature en cours de vol ne produit rien).
-function Economy.GetIncomePerSecond(data, passes: Passes, excluded: { [string]: boolean }?): number
+-- Revenu de base (créatures seules, sans aucun multiplicateur)
+function Economy.GetBaseIncome(data, excluded: { [string]: boolean }?): number
 	local base = 0
 	for _, entry in data.Creatures do
 		if not (excluded and excluded[entry.Uid]) then
 			base += Economy.GetCreatureIncome(entry)
 		end
 	end
-	return base * Economy.GetGlobalMultiplier(data, passes)
+	return base
+end
+
+-- Revenu total par seconde. "excluded" = Uids actuellement portés par un voleur
+-- (une créature en cours de vol ne produit rien).
+function Economy.GetIncomePerSecond(data, passes: Passes, excluded: { [string]: boolean }?, bonus: Bonus?): number
+	return Economy.GetBaseIncome(data, excluded) * Economy.GetGlobalMultiplier(data, passes, bonus)
+end
+
+-- Argent gagné pendant une absence (revenu "de base" du joueur au moment de son départ)
+function Economy.GetOfflineEarnings(incomePerSecond: number, secondsAway: number): number
+	local config = GameConfig.Offline
+	if secondsAway < config.MinSeconds or incomePerSecond <= 0 then
+		return 0
+	end
+	local seconds = math.min(secondsAway, config.MaxHours * 3600)
+	return math.floor(incomePerSecond * seconds * config.Rate)
+end
+
+-- Montant d'une récompense de type "Money" (format commun, voir GameConfig)
+function Economy.GetRewardMoney(reward, rebirths: number, incomePerSecond: number): number
+	local base = (reward.Base or 0) * (1 + rebirths)
+	return math.floor(base + incomePerSecond * (reward.IncomeMinutes or 0) * 60)
+end
+
+-- Titre affiché au-dessus du joueur
+function Economy.GetTitle(rebirths: number)
+	local best = GameConfig.Titles[1]
+	for _, title in GameConfig.Titles do
+		if rebirths >= title.Rebirths then
+			best = title
+		end
+	end
+	return best
 end
 
 function Economy.GetMaxSlots(data, passes: Passes): number

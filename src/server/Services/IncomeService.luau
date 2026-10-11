@@ -9,6 +9,14 @@
 
 	L'argent est répliqué au client via l'attribut "Money" du Player (léger,
 	automatique) ; le reste des données passe par SyncService.
+
+	Le revenu est recalculé à chaque versement (calcul très léger) : les bonus
+	temporaires (boost x2, amis présents) s'appliquent et expirent sans aucune
+	invalidation de cache à gérer.
+
+	Gains hors ligne : à chaque versement on mémorise LastSeen / LastIncome
+	(revenu de base, sans bonus temporaires) ; à la connexion suivante le joueur
+	touche Offline.Rate x ce revenu pendant son absence (plafonnée).
 ]]
 
 local Players = game:GetService("Players")
@@ -30,6 +38,13 @@ local function publish(player: Player, data)
 	Services.LeaderboardService.UpdateLeaderstats(player)
 end
 
+-- Bonus temporaires et sociaux du joueur (amis, groupe, boost x2)
+function IncomeService.GetBonus(player: Player, data)
+	local bonus = Services.SocialBonusService.GetBonus(player)
+	bonus.Boost = (data.Boosts.MoneyUntil or 0) > os.time()
+	return bonus
+end
+
 function IncomeService.Recalculate(player: Player): number
 	local data = Services.DataService.GetData(player)
 	if not data then
@@ -38,10 +53,39 @@ function IncomeService.Recalculate(player: Player): number
 	end
 	local passes = Services.MonetizationService.GetPasses(player)
 	local excluded = Services.StealService.GetCarriedUids(player)
-	local income = Economy.GetIncomePerSecond(data, passes, excluded)
+	local income = Economy.GetIncomePerSecond(data, passes, excluded, IncomeService.GetBonus(player, data))
+	if incomeCache[player] ~= income then
+		player:SetAttribute("IncomePerSecond", income)
+	end
 	incomeCache[player] = income
-	player:SetAttribute("IncomePerSecond", income)
 	return income
+end
+
+-- Revenu "de base" (sans bonus temporaires) : sert aux gains hors ligne
+local function getBaseIncome(player: Player, data): number
+	return Economy.GetIncomePerSecond(data, Services.MonetizationService.GetPasses(player))
+end
+
+local function grantOfflineEarnings(player: Player, data)
+	local lastSeen = tonumber(data.LastSeen) or 0
+	if lastSeen <= 0 then
+		return
+	end
+	local away = os.time() - lastSeen
+	local amount = Economy.GetOfflineEarnings(tonumber(data.LastIncome) or 0, away)
+	if amount <= 0 then
+		return
+	end
+	IncomeService.AddMoney(player, amount, true)
+	-- Laisse le temps au client de charger son interface avant la fenêtre de bienvenue
+	task.delay(3, function()
+		if player.Parent then
+			Services.NotificationService.Effect(player, "OfflineEarnings", {
+				Amount = amount,
+				Seconds = math.min(away, GameConfig.Offline.MaxHours * 3600),
+			})
+		end
+	end)
 end
 
 function IncomeService.GetIncome(player: Player): number
@@ -91,6 +135,8 @@ end
 
 function IncomeService.Start()
 	Services.DataService.ProfileLoaded:Connect(function(player: Player, profile)
+		-- Avant tout versement : LastSeen est encore celui de la session précédente
+		grantOfflineEarnings(player, profile.Data)
 		IncomeService.Recalculate(player)
 		publish(player, profile.Data)
 	end)
@@ -104,10 +150,16 @@ function IncomeService.Start()
 			local elapsed = task.wait(tick)
 			-- On paie le temps réellement écoulé (si le serveur ralentit, rien n'est perdu)
 			local dt = math.min(elapsed, tick * 3)
+			local now = os.time()
 			for _, player in Services.DataService.GetLoadedPlayers() do
-				local income = IncomeService.GetIncome(player)
-				if income > 0 then
-					IncomeService.AddMoney(player, income * dt, true)
+				local data = Services.DataService.GetData(player)
+				if data then
+					local income = IncomeService.Recalculate(player)
+					if income > 0 then
+						IncomeService.AddMoney(player, income * dt, true)
+					end
+					data.LastSeen = now
+					data.LastIncome = getBaseIncome(player, data)
 				end
 			end
 		end

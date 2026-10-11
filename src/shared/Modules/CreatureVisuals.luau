@@ -144,6 +144,18 @@ local function ellipsoid(ctx: Ctx, size: Vector3, cf: CFrame, color: Color3, mat
 	return part
 end
 
+-- Équivalent de CFrame.lookAt via fromMatrix (résultat identique dans Roblox) :
+-- les aperçus hors Roblox passent par Lune, dont CFrame.lookAt est en miroir.
+local function lookAt(position: Vector3, target: Vector3): CFrame
+	local look = (target - position).Unit
+	local right = look:Cross(Vector3.yAxis)
+	if right.Magnitude < 1e-6 then
+		right = Vector3.xAxis
+	end
+	right = right.Unit
+	return CFrame.fromMatrix(position, right, right:Cross(look), -look)
+end
+
 local function box(ctx: Ctx, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?): Part
 	return newPart(ctx, "Body", size, cf, color, material or ctx.Material)
 end
@@ -446,7 +458,7 @@ function Archetypes.Spiky(ctx: Ctx): Shape
 		local spike = box(
 			ctx,
 			Vector3.new(0.55, 0.55, 1.5),
-			CFrame.lookAt(base, base + dir) * CFrame.new(0, 0, -0.55),
+			lookAt(base, base + dir) * CFrame.new(0, 0, -0.55),
 			ctx.Accent,
 			Enum.Material.Neon
 		)

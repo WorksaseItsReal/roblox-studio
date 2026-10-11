@@ -193,10 +193,24 @@ local function deliver(carry: Carry)
 
 	local def = Creatures.Get(entry.Id)
 	local name = if def then def.Name else entry.Id
+	local rarity = def and Rarities.Get(def.Rarity)
 	Services.NotificationService.Notify(thief, "Vol réussi : " .. name .. " est à toi !", "Success")
 	Services.NotificationService.Notify(victim, thief.DisplayName .. " t'a volé " .. name .. " !", "Steal")
+	Services.NotificationService.Effect(thief, "Celebrate", {
+		Color = if rarity then rarity.Color else Color3.new(1, 1, 1),
+		Text = "VOL RÉUSSI !",
+	})
+	Services.NotificationService.Effect(victim, "Shake", { Intensity = 1 })
+	Services.NotificationService.Feed(
+		string.format("%s a volé %s à %s", thief.DisplayName, name, victim.DisplayName),
+		if rarity then rarity.Color else Color3.new(1, 1, 1),
+		"🦹"
+	)
+	Services.QuestService.RecordEvent(thief, "Steal", 1)
+	Services.NameTagService.Refresh(thief)
+	-- Vengeance : la victime peut se téléporter gratuitement chez le voleur
+	Services.ShortcutService.GrantRevenge(victim, thief)
 
-	local rarity = def and Rarities.Get(def.Rarity)
 	if rarity and rarity.Tier >= CONFIG.AnnounceMinTier then
 		Services.NotificationService.Announce(
 			"Vol " .. rarity.Name .. " !",
@@ -365,6 +379,21 @@ local function checkCarry(carry: Carry)
 	local victimRoot = Services.CharacterService.GetRootPart(victim)
 	if victimRoot and (victimRoot.Position - root.Position).Magnitude <= CONFIG.RecoverDistance then
 		fail(carry, victim.DisplayName .. " a récupéré sa créature !", "Créature récupérée !")
+		local victimData = Services.DataService.GetData(victim)
+		if victimData then
+			victimData.Stats.Recovered += 1
+		end
+		Services.QuestService.RecordEvent(victim, "Recover", 1)
+		Services.NotificationService.Effect(
+			victim,
+			"Celebrate",
+			{ Color = Color3.fromRGB(90, 220, 120), Text = "RÉCUPÉRÉE !" }
+		)
+		Services.NotificationService.Feed(
+			string.format("%s a repris sa créature à %s", victim.DisplayName, thief.DisplayName),
+			Color3.fromRGB(90, 220, 120),
+			"🛡️"
+		)
 		return
 	end
 

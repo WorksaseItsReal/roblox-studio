@@ -30,6 +30,7 @@ local Odds = require(Shared.Modules.Odds)
 local PathMath = require(Shared.Modules.PathMath)
 local Format = require(Shared.Modules.Format)
 local CreatureVisuals = require(Shared.Modules.CreatureVisuals)
+local StormSchedule = require(Shared.Modules.StormSchedule)
 
 local RiftService = {}
 
@@ -58,6 +59,12 @@ local luckMultiplier = 1
 local luckEndsAt = 0
 local lastPortalAt = -math.huge
 
+-- Tempête de la Rift (événement global horaire, voir GameConfig.Storm)
+local stormActive = false
+local stormStartsAt = 0
+local stormEndsAt = 0
+local stormWarnedFor = -1
+
 local function now(): number
 	return workspace:GetServerTimeNow()
 end
@@ -67,14 +74,26 @@ local function publishState()
 	stateFolder:SetAttribute("DimensionEndsAt", dimensionEndsAt)
 	stateFolder:SetAttribute("LuckMultiplier", luckMultiplier)
 	stateFolder:SetAttribute("LuckEndsAt", luckEndsAt)
+	stateFolder:SetAttribute("StormActive", stormActive)
+	stateFolder:SetAttribute("StormStartsAt", stormStartsAt)
+	stateFolder:SetAttribute("StormEndsAt", stormEndsAt)
 end
 
 function RiftService.GetDimension(): string
 	return currentDimension
 end
 
+function RiftService.IsStormActive(): boolean
+	return stormActive
+end
+
+-- Chance effective = pack de chance acheté x tempête
 function RiftService.GetLuck(): number
-	return if now() < luckEndsAt then luckMultiplier else 1
+	local luck = if now() < luckEndsAt then luckMultiplier else 1
+	if stormActive then
+		luck *= GameConfig.Storm.LuckMultiplier
+	end
+	return luck
 end
 
 ---------------------------------------------------------------------------
@@ -317,10 +336,54 @@ function RiftService.Start()
 	local nextSpawnAt = now()
 	local nextPortalCheck = now() + (if fastPortals then 10 else portalConfig.CheckIntervalSeconds)
 
+	local function updateStorm(t: number)
+		local config = GameConfig.Storm
+		local state = StormSchedule.Get(t, config)
+		local changed = state.StartsAt ~= stormStartsAt or state.Active ~= stormActive
+		stormStartsAt = state.StartsAt
+		stormEndsAt = state.EndsAt
+
+		if state.Active and not stormActive then
+			stormActive = true
+			Services.NotificationService.Announce(
+				"🌪️ TEMPÊTE DE LA RIFT !",
+				string.format(
+					"Chance x%d et deux fois plus de créatures pendant %s !",
+					config.LuckMultiplier,
+					Format.Time(state.EndsAt - t)
+				),
+				Color3.fromRGB(255, 70, 140)
+			)
+			Services.NotificationService.Effect(nil, "Storm", { Active = true })
+			if config.GuaranteedPortal then
+				RiftService.OpenUnstablePortal()
+			end
+		elseif not state.Active and stormActive then
+			stormActive = false
+			Services.NotificationService.Announce(
+				"La tempête se calme...",
+				"Prochaine tempête dans 1 heure. Reste connecté !",
+				Color3.fromRGB(150, 130, 255)
+			)
+			Services.NotificationService.Effect(nil, "Storm", { Active = false })
+		elseif not state.Active and state.StartsAt - t <= config.WarnSeconds and stormWarnedFor ~= state.StartsAt then
+			stormWarnedFor = state.StartsAt
+			Services.NotificationService.Announce(
+				"🌪️ Tempête dans " .. Format.Time(state.StartsAt - t) .. " !",
+				"Garde de l'argent de côté : chance x" .. config.LuckMultiplier .. " pendant la tempête.",
+				Color3.fromRGB(255, 150, 60)
+			)
+		end
+		if changed then
+			publishState()
+		end
+	end
+
 	task.spawn(function()
 		while true do
 			task.wait(0.25)
 			local t = now()
+			updateStorm(t)
 
 			if t >= dimensionEndsAt then
 				setDimension(Dimensions.Next(currentDimension), nil)
@@ -342,8 +405,10 @@ function RiftService.Start()
 				local dimension = Dimensions.Get(currentDimension)
 				local interval = GameConfig.Rift.SpawnIntervalSeconds
 					* (if dimension then dimension.SpawnIntervalMultiplier else 1)
+					* (if stormActive then GameConfig.Storm.SpawnIntervalMultiplier else 1)
 				nextSpawnAt = t + interval * rng:NextNumber(0.8, 1.2)
-				if spawnCount < GameConfig.Rift.MaxActiveSpawns then
+				local maxSpawns = GameConfig.Rift.MaxActiveSpawns * (if stormActive then 1.5 else 1)
+				if spawnCount < maxSpawns then
 					spawnRandom()
 				end
 			end

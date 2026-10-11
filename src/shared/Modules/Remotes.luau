@@ -30,6 +30,11 @@ Remotes.FunctionNames = {
 	"SetDimensionChoice",
 	"GetLeaderboard",
 	"RequestSync",
+	"ClaimQuest",
+	"ClaimQuestBonus",
+	"ClaimGift",
+	"RedeemCode",
+	"CompleteTutorial",
 }
 
 -- Serveur -> Client
@@ -39,6 +44,7 @@ Remotes.EventNames = {
 	"Announce", -- grande annonce globale
 	"LeaderboardUpdated", -- nouveau classement
 	"Effect", -- effets visuels (fusion, téléportation, intrus...)
+	"Feed", -- fil d'actualité du serveur (vols, captures rares...)
 }
 
 local FOLDER_NAME = "Remotes"

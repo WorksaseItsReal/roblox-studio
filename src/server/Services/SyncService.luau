@@ -53,6 +53,12 @@ function SyncService.BuildSnapshot(player: Player)
 		BeingStolen = carriedList, -- mes créatures actuellement portées par un voleur
 		Carrying = carrying, -- ce que JE porte (nil si rien)
 		ShortcutReadyAt = Services.ShortcutService.GetReadyAt(player),
+		Revenge = Services.ShortcutService.GetRevengeInfo(player),
+		Quests = Services.QuestService.GetSnapshot(player),
+		Gifts = Services.PlaytimeService.GetSnapshot(player),
+		TutorialDone = data.TutorialDone,
+		BoostSecondsLeft = math.max(0, (data.Boosts.MoneyUntil or 0) - os.time()),
+		FriendCount = (Services.SocialBonusService.GetBonus(player)).Friends,
 		ServerUtcDay = Economy.GetUtcDay(os.time()),
 		ServerUnixTime = os.time(),
 	}

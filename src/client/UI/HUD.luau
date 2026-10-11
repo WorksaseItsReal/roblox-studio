@@ -1,21 +1,26 @@
 --[[
 	HUD
 	===
-	- Haut gauche  : argent (icône, gros chiffre, revenu/s) + stats (rebirths, vols)
-	- Haut centre  : carte de dimension (icône, nom, timer avec barre) + chance serveur
-	- Gauche       : menu en grille de gros boutons-icônes
-	- Bas centre   : bouton de barrière (état / recharge) + bandeau de vol en cours
+	- Haut gauche  : argent (icône, gros chiffre, revenu/s) + pastilles (rebirths,
+	                 vols, bonus amis, boost x2 actif)
+	- Haut centre  : carte de dimension (icône, nom, timer) + chance + tempête
+	- Gauche       : menu principal (grille de gros boutons-icônes)
+	- Droite       : rail de récompenses (cadeau du jour, cadeaux de session,
+	                 codes, inviter des amis) avec pastilles rouges
+	- Bas centre   : barrière, bandeau de vol, bouton Vengeance
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SocialService = game:GetService("SocialService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
 local GameConfig = require(Shared.Config.GameConfig)
 local Dimensions = require(Shared.Config.Dimensions)
 local Creatures = require(Shared.Config.Creatures)
+local Economy = require(Shared.Modules.Economy)
 local Format = require(Shared.Modules.Format)
 local Theme = require(script.Parent.Theme)
 local UIKit = require(script.Parent.UIKit)
@@ -29,11 +34,18 @@ local MENU = {
 	{ Panel = "Fusion", Text = "Fusion", Icon = "🌀", Color = "Purple" },
 	{ Panel = "Base", Text = "Base", Icon = "🏰", Color = "Orange" },
 	{ Panel = "Index", Text = "Index", Icon = "📖", Color = "Teal" },
+	{ Panel = "Quests", Text = "Quêtes", Icon = "📜", Color = "Gold" },
 	{ Panel = "Rebirth", Text = "Rebirth", Icon = "🔁", Color = "Pink" },
 	{ Panel = "Shortcut", Text = "Portail", Icon = "🌠", Color = "Cyan" },
-	{ Panel = "Daily", Text = "Cadeau", Icon = "🎁", Color = "Gold" },
 	{ Panel = "Leaderboard", Text = "Top", Icon = "🏆", Color = "Dark" },
 	{ Panel = "Shop", Text = "Boutique", Icon = "🛒", Color = "Green" },
+}
+
+local RAIL = {
+	{ Id = "Daily", Text = "Cadeau", Icon = "🎁", Color = "Gold" },
+	{ Id = "Gifts", Text = "Bonus", Icon = "⏰", Color = "Pink" },
+	{ Id = "Codes", Text = "Codes", Icon = "🔑", Color = "Cyan" },
+	{ Id = "Invite", Text = "Amis", Icon = "👥", Color = "Green" },
 }
 
 local function findMyPlot(): Instance?
@@ -54,8 +66,39 @@ local function pillText(pill: Frame): TextLabel
 	return pill:FindFirstChild("Text") :: TextLabel
 end
 
+-- Une récompense d'index est-elle réclamable ?
+local function indexClaimable(profile): boolean
+	for _, dimensionId in Dimensions.Order do
+		for _, tier in { "Complete", "Perfect" } do
+			if not profile.IndexClaimed[dimensionId .. ":" .. tier] then
+				local complete = true
+				for _, def in Creatures.ByDimension[dimensionId] or {} do
+					if (tier == "Perfect" or def.Rarity ~= "Secret") and not profile.Index[def.Id] then
+						complete = false
+						break
+					end
+				end
+				if complete then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+local function promptInvite(ctx)
+	local ok, canInvite = pcall(SocialService.CanSendGameInviteAsync, SocialService, player)
+	if ok and canInvite then
+		pcall(SocialService.PromptGameInvite, SocialService, player)
+	else
+		ctx.Toast("Les invitations ne sont pas disponibles ici.", "Error")
+	end
+end
+
 function HUD.Create(root: Frame, ctx)
 	local State = ctx.State
+	local Panels = ctx.UI.Panels
 
 	-------------------------------------------------- Argent
 	local moneyHolder = UIKit.New("Frame", {
@@ -98,17 +141,28 @@ function HUD.Create(root: Frame, ctx)
 	})
 	local moneyScale = UIKit.New("UIScale", { Parent = moneyLabel })
 
-	-- Petites stats sous l'argent
+	-- Pastilles sous l'argent
 	local statsRow = UIKit.New("Frame", {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(52, 100),
-		Size = UDim2.fromOffset(300, 30),
+		Size = UDim2.fromOffset(420, 30),
 		Parent = root,
 	})
 	UIKit.List(statsRow, Enum.FillDirection.Horizontal, 8)
 	local rebirthPill =
 		UIKit.Pill("🔁 Rebirth 0", Color3.fromRGB(230, 90, 190), { Parent = statsRow, LayoutOrder = 1 })
 	local stealsPill = UIKit.Pill("🦹 Vols 0", Color3.fromRGB(90, 140, 255), { Parent = statsRow, LayoutOrder = 2 })
+	local boostRow = UIKit.New("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(52, 134),
+		Size = UDim2.fromOffset(420, 30),
+		Parent = root,
+	})
+	UIKit.List(boostRow, Enum.FillDirection.Horizontal, 8)
+	local friendsPill =
+		UIKit.Pill("👥 +0%", Color3.fromRGB(60, 190, 90), { Parent = boostRow, LayoutOrder = 1, Visible = false })
+	local boostPill =
+		UIKit.Pill("⚡ x2", Color3.fromRGB(255, 150, 40), { Parent = boostRow, LayoutOrder = 2, Visible = false })
 
 	-------------------------------------------------- Dimension
 	local dimHolder = UIKit.New("Frame", {
@@ -143,21 +197,36 @@ function HUD.Create(root: Frame, ctx)
 		Size = UDim2.new(1, -82, 0, 28),
 		Parent = dimCard,
 	}, Color3.fromRGB(255, 255, 255))
-	local luckPill = UIKit.Pill("🍀 Chance x2", Color3.fromRGB(80, 210, 90), {
+	-- Chance + tempête sous la carte
+	local eventRow = UIKit.New("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(30, 98),
+		Size = UDim2.new(1, -30, 0, 32),
 		Parent = dimHolder,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 15, 0, 100),
+	})
+	UIKit.List(eventRow, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
+	local luckPill = UIKit.Pill("🍀 Chance x2", Color3.fromRGB(80, 210, 90), {
+		Parent = eventRow,
+		LayoutOrder = 1,
 		Size = UDim2.fromOffset(0, 30),
-		TextSize = 17,
+		TextSize = 16,
 		Visible = false,
 	})
+	local stormPill = UIKit.Pill("🌪️ Tempête", Color3.fromRGB(255, 80, 150), {
+		Parent = eventRow,
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0, 30),
+		TextSize = 16,
+		Visible = false,
+	})
+	local stormScale = UIKit.New("UIScale", { Parent = stormPill })
 
-	-------------------------------------------------- Menu
+	-------------------------------------------------- Menu principal (gauche)
 	local menu = UIKit.New("Frame", {
 		Name = "Menu",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 18, 0.5, 46),
+		Position = UDim2.new(0, 18, 0.5, 70),
 		Size = UDim2.fromOffset(176, 456),
 		Parent = root,
 	})
@@ -167,8 +236,9 @@ function HUD.Create(root: Frame, ctx)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = menu,
 	})
+	local badges = {}
 	for order, item in MENU do
-		UIKit.IconButton({
+		local button = UIKit.IconButton({
 			Name = item.Panel,
 			Icon = item.Icon,
 			Text = item.Text,
@@ -179,7 +249,46 @@ function HUD.Create(root: Frame, ctx)
 				ctx.UI.Toggle(item.Panel)
 			end,
 		})
+		badges[item.Panel] = UIKit.Badge(button)
 	end
+
+	-------------------------------------------------- Rail de récompenses (droite)
+	local rail = UIKit.New("Frame", {
+		Name = "Rail",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -18, 0.5, -30),
+		Size = UDim2.fromOffset(82, 4 * 92),
+		Parent = root,
+	})
+	UIKit.List(rail, Enum.FillDirection.Vertical, 8)
+	local railButtons = {}
+	for order, item in RAIL do
+		local button = UIKit.IconButton({
+			Name = item.Id,
+			Icon = item.Icon,
+			Text = item.Text,
+			Color = item.Color,
+			Size = UDim2.fromOffset(82, 84),
+			LayoutOrder = order,
+			Parent = rail,
+			OnClick = function()
+				if item.Id == "Invite" then
+					promptInvite(ctx)
+				else
+					ctx.UI.Toggle(item.Id)
+				end
+			end,
+		})
+		railButtons[item.Id] = button
+		badges[item.Id] = UIKit.Badge(button)
+	end
+	local giftCaption = railButtons.Gifts.Face:FindFirstChild("Caption", true) :: TextLabel
+	local inviteBadge = badges.Invite;
+	(inviteBadge:FindFirstChild("Text") :: TextLabel).Text =
+		string.format("+%d%%", math.round(GameConfig.Social.FriendBonusPerFriend * 100))
+	inviteBadge.Size = UDim2.fromOffset(52, 26)
+	inviteBadge.Visible = true
 
 	-------------------------------------------------- Barrière
 	local barrier = UIKit.Button({
@@ -195,7 +304,6 @@ function HUD.Create(root: Frame, ctx)
 			ctx.Net.Request("ActivateBarrier")
 		end,
 	})
-	-- Voile de recharge par-dessus le bouton
 	local cooldownFill = UIKit.New("Frame", {
 		Name = "Cooldown",
 		BackgroundColor3 = Color3.new(0, 0, 0),
@@ -230,6 +338,26 @@ function HUD.Create(root: Frame, ctx)
 	})
 	local carryScale = UIKit.New("UIScale", { Parent = carryBanner })
 
+	-------------------------------------------------- Vengeance
+	local revengeTarget: number? = nil
+	local revenge = UIKit.Button({
+		Name = "Revenge",
+		Text = "⚔️ VENGEANCE",
+		Color = "Red",
+		TextSize = 22,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -164),
+		Size = UDim2.fromOffset(460, 66),
+		Parent = root,
+		OnClick = function()
+			if revengeTarget then
+				ctx.Net.Request("UseShortcut", revengeTarget)
+			end
+		end,
+	})
+	revenge.Instance.Visible = false
+	local revengeScale = revenge.Instance:FindFirstChildOfClass("UIScale") :: UIScale
+
 	-------------------------------------------------- Mises à jour
 	local lastMoney = State.GetMoney()
 	local function refreshMoney()
@@ -248,10 +376,15 @@ function HUD.Create(root: Frame, ctx)
 
 	local function refreshStats()
 		local profile = State.Profile
-		if profile then
-			pillText(rebirthPill).Text = "🔁 Rebirth " .. profile.Rebirths
-			pillText(stealsPill).Text = "🦹 Vols " .. profile.Stats.Steals
+		if not profile then
+			return
 		end
+		pillText(rebirthPill).Text = "🔁 Rebirth " .. profile.Rebirths
+		pillText(stealsPill).Text = "🦹 Vols " .. profile.Stats.Steals
+		local friends = profile.FriendCount or 0
+		friendsPill.Visible = friends > 0
+		pillText(friendsPill).Text =
+			string.format("👥 %d ami(s) +%d%%", friends, math.round(Economy.GetFriendBonus(friends) * 100))
 	end
 	State.ProfileChanged:Connect(refreshStats)
 	refreshStats()
@@ -259,6 +392,8 @@ function HUD.Create(root: Frame, ctx)
 	local currentDimension = nil
 	local function update()
 		local now = workspace:GetServerTimeNow()
+		local profile = State.Profile
+		local sinceSync = if profile then os.clock() - (profile.ReceivedAt or os.clock()) else 0
 
 		-- Dimension
 		local stateFolder = State.GameState
@@ -287,12 +422,53 @@ function HUD.Create(root: Frame, ctx)
 					string.format("%s dans %s", if nextDimension then nextDimension.Name else "?", Format.Time(left))
 				)
 			end
-			local luck = State.GetLuck()
-			luckPill.Visible = luck > 1
-			if luck > 1 then
+
+			local stormActive = State.IsStormActive()
+			local purchased = State.GetPurchasedLuck()
+			local shownLuck = State.GetLuck() -- inclut la tempête
+			luckPill.Visible = shownLuck > 1
+			if shownLuck > 1 then
 				local luckEnds = stateFolder:GetAttribute("LuckEndsAt") or now
-				pillText(luckPill).Text = string.format("🍀 Chance x%g • %s", luck, Format.Time(luckEnds - now))
+				pillText(luckPill).Text = if purchased > 1
+					then string.format("🍀 Chance x%g • %s", shownLuck, Format.Time(luckEnds - now))
+					else string.format("🍀 Chance x%g", shownLuck)
 			end
+
+			local stormStarts = stateFolder:GetAttribute("StormStartsAt") or 0
+			local stormEnds = stateFolder:GetAttribute("StormEndsAt") or 0
+			if stormActive then
+				stormPill.Visible = true
+				pillText(stormPill).Text = "🌪️ TEMPÊTE ! " .. Format.Time(stormEnds - now)
+				stormScale.Scale = 1 + math.abs(math.sin(os.clock() * 5)) * 0.08
+			elseif stormStarts - now <= 15 * 60 and stormStarts > now then
+				stormPill.Visible = true
+				pillText(stormPill).Text = "🌪️ Tempête dans " .. Format.Time(stormStarts - now)
+				stormScale.Scale = 1
+			else
+				stormPill.Visible = false
+			end
+		end
+
+		-- Boost x2 actif
+		local boostLeft = if profile then (profile.BoostSecondsLeft or 0) - sinceSync else 0
+		boostPill.Visible = boostLeft > 0
+		if boostLeft > 0 then
+			pillText(boostPill).Text =
+				string.format("⚡ Argent x%d • %s", GameConfig.Boosts.MoneyMultiplier, Format.Time(boostLeft))
+		end
+
+		-- Pastilles rouges et compte à rebours des cadeaux
+		if profile then
+			badges.Quests.Visible = Panels.Quests.HasClaimable(profile)
+			badges.Gifts.Visible = Panels.Gifts.HasClaimable(profile)
+			badges.Index.Visible = indexClaimable(profile)
+			local today = Economy.GetUtcDay(State.GetServerUnixTime())
+			badges.Daily.Visible = profile.Daily.LastDay ~= today
+			local nextGift = Panels.Gifts.NextUnlockIn(profile)
+			giftCaption.Text = if badges.Gifts.Visible
+				then "PRÊT !"
+				elseif nextGift then Format.Time(nextGift)
+				else "Bonus"
 		end
 
 		-- Barrière
@@ -321,10 +497,9 @@ function HUD.Create(root: Frame, ctx)
 		end
 
 		-- Vol en cours
-		local profile = State.Profile
 		if profile and profile.Carrying then
 			local def = Creatures.Get(profile.Carrying.CreatureId)
-			local left = (profile.Carrying.SecondsLeft or 0) - (os.clock() - profile.ReceivedAt)
+			local left = (profile.Carrying.SecondsLeft or 0) - sinceSync
 			carryBanner.Visible = true
 			carryGradient.Color = ColorSequence.new(Color3.fromRGB(130, 245, 120), Color3.fromRGB(30, 150, 60))
 			carryText.Text = string.format(
@@ -340,6 +515,25 @@ function HUD.Create(root: Frame, ctx)
 			carryScale.Scale = 1 + math.abs(math.sin(os.clock() * 6)) * 0.05
 		else
 			carryBanner.Visible = false
+		end
+
+		-- Vengeance disponible
+		local revengeInfo = profile and profile.Revenge
+		local revengeLeft = if revengeInfo then revengeInfo.SecondsLeft - sinceSync else 0
+		if revengeInfo and revengeLeft > 0 then
+			revengeTarget = revengeInfo.ThiefUserId
+			revenge.Instance.Visible = true
+			revenge:SetText(
+				string.format(
+					"⚔️ VENGEANCE sur %s (gratuit) • %s",
+					revengeInfo.ThiefName,
+					Format.Time(revengeLeft)
+				)
+			)
+			revengeScale.Scale = 1 + math.abs(math.sin(os.clock() * 4)) * 0.05
+		else
+			revengeTarget = nil
+			revenge.Instance.Visible = false
 		end
 	end
 

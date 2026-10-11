@@ -31,6 +31,7 @@ type Tracked = {
 	Speed: number,
 	Hip: number,
 	Seed: number,
+	Pillar: BasePart?,
 }
 
 local tracked: { [Model]: Tracked } = {}
@@ -58,6 +59,34 @@ local function addBuyPrompt(model: Model)
 	end)
 end
 
+-- Colonne de lumière visible de toute la map pour les Légendaires et plus :
+-- tout le monde voit qu'une créature rare est sortie et court l'acheter.
+local function addLightPillar(model: Model): BasePart?
+	local root = model.PrimaryPart
+	local def = Creatures.Get(tostring(model:GetAttribute("CreatureId") or ""))
+	local rarity = def and Rarities.Get(def.Rarity)
+	if not root or not rarity or rarity.Tier < 4 then
+		return nil
+	end
+	local height = 90
+	local pillar = Instance.new("Part")
+	pillar.Name = "LightPillar"
+	pillar.Shape = Enum.PartType.Cylinder
+	pillar.Anchored = true
+	pillar.CanCollide = false
+	pillar.CanQuery = false
+	pillar.CanTouch = false
+	pillar.CastShadow = false
+	pillar.Material = Enum.Material.Neon
+	pillar.Color = rarity.Color
+	pillar.Transparency = if rarity.Tier >= 6 then 0.35 else 0.55
+	pillar.Size = Vector3.new(height, 2.4, 2.4)
+	-- Cylindre debout, posé sur la créature (suit le modèle à chaque PivotTo)
+	pillar.CFrame = CFrame.new(root.Position + Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	pillar.Parent = model
+	return pillar
+end
+
 local function track(model: Instance)
 	if not model:IsA("Model") or tracked[model] then
 		return
@@ -83,6 +112,7 @@ local function track(model: Instance)
 	}
 	if moverType == "Conveyor" then
 		addBuyPrompt(model)
+		tracked[model].Pillar = addLightPillar(model)
 	end
 end
 
@@ -100,9 +130,18 @@ local function update()
 		if flat.Magnitude < 0.01 then
 			flat = Vector3.zAxis
 		end
-		local bob = math.abs(math.sin(clock * 6 + info.Seed)) * 0.4
+		-- Petit sautillement + dandinement : les créatures "marchent"
+		local step = clock * 7 + info.Seed
+		local bob = math.abs(math.sin(step)) * 0.45
+		local waddle = math.sin(step) * 0.14
 		local base = position + Vector3.new(0, info.Hip + bob, 0)
-		model:PivotTo(CFrame.lookAt(base, base + flat.Unit))
+		model:PivotTo(CFrame.lookAt(base, base + flat.Unit) * CFrame.Angles(0, 0, waddle))
+		-- La colonne de lumière reste bien verticale (pas de dandinement)
+		local pillar = info.Pillar
+		if pillar then
+			pillar.CFrame = CFrame.new(position + Vector3.new(0, pillar.Size.X / 2, 0))
+				* CFrame.Angles(0, 0, math.rad(90))
+		end
 	end
 end
 

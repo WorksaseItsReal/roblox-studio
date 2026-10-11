@@ -18,6 +18,9 @@ local Theme = require(script.Parent.Theme)
 
 local UIKit = {}
 
+-- Crochet appelé à chaque clic sur un bouton actif (le SoundController y branche le son)
+UIKit.OnClick = nil :: (() -> ())?
+
 type Props = { [string]: any }
 
 -- Crée une instance avec ses propriétés et ses enfants
@@ -289,6 +292,9 @@ function UIKit.Button(opts: Props): Button
 		end
 		scale.Scale = 0.94
 		TweenService:Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1 }):Play()
+		if UIKit.OnClick then
+			UIKit.OnClick()
+		end
 		if opts.OnClick then
 			opts.OnClick()
 		end
@@ -325,6 +331,60 @@ function UIKit.IconButton(opts: Props): Button
 		Parent = button.Face,
 	})
 	return button
+end
+
+-- Pastille rouge "!" (ou un texte court) dans le coin d'un bouton : attire l'œil
+-- vers ce qui est à réclamer. Invisible par défaut.
+function UIKit.Badge(button: Button, text: string?): Frame
+	local badge = UIKit.New("Frame", {
+		Name = "Badge",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -6, 0, 6),
+		Size = UDim2.fromOffset(28, 28),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Visible = false,
+		ZIndex = button.Face.ZIndex + 5,
+		Parent = button.Instance,
+	})
+	UIKit.Round(badge)
+	UIKit.Stroke(badge, 2.5)
+	UIKit.Gradient(badge, Color3.fromRGB(255, 110, 110), Color3.fromRGB(210, 30, 50))
+	UIKit.Text({
+		Name = "Text",
+		Text = text or "!",
+		TextSize = 18,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = badge.ZIndex + 1,
+		Parent = badge,
+	})
+	return badge
+end
+
+-- Champ de saisie arrondi
+function UIKit.Input(props: Props): TextBox
+	local box = UIKit.New("TextBox", {
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Font = Theme.Font,
+		TextSize = 24,
+		TextColor3 = Theme.TextDark,
+		PlaceholderColor3 = Color3.fromRGB(140, 130, 170),
+		ClearTextOnFocus = false,
+		Text = "",
+		Size = UDim2.new(1, 0, 0, 56),
+	})
+	for key, value in pairs(props) do
+		if key ~= "Parent" then
+			(box :: any)[key] = value
+		end
+	end
+	UIKit.Corner(box, 16)
+	UIKit.Stroke(box, 3.5)
+	UIKit.Gradient(box, Color3.fromRGB(255, 255, 255), Color3.fromRGB(222, 216, 245))
+	UIKit.Padding(box, 0, 16, 0, 16)
+	box.Parent = props.Parent
+	return box
 end
 
 ---------------------------------------------------------------------------

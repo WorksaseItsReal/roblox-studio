@@ -207,6 +207,105 @@ GameConfig.RateLimits = {
 	GetLeaderboard = { Rate = 0.5, Burst = 3 },
 	RequestSync = { Rate = 1, Burst = 3 },
 	StealPrompt = { Rate = 1, Burst = 3 },
+	ClaimQuest = { Rate = 1, Burst = 4 },
+	ClaimGift = { Rate = 1, Burst = 4 },
+	RedeemCode = { Rate = 0.3, Burst = 3 }, -- strict : empêche de tester des codes en masse
+	CompleteTutorial = { Rate = 0.2, Burst = 2 },
+}
+
+---------------------------------------------------------------------------
+-- Gains hors ligne : les créatures continuent de produire pendant l'absence
+---------------------------------------------------------------------------
+GameConfig.Offline = {
+	Rate = 0.5, -- 50 % du revenu de base
+	MaxHours = 8, -- plafond (incite à revenir au moins une fois par jour)
+	MinSeconds = 120, -- en dessous : rien (pas de farm par reconnexion)
+}
+
+---------------------------------------------------------------------------
+-- Bonus sociaux (moteur de viralité : jouer avec ses amis rapporte plus)
+---------------------------------------------------------------------------
+GameConfig.Social = {
+	FriendBonusPerFriend = 0.10, -- +10 % de revenus par ami présent sur le serveur...
+	FriendBonusMax = 0.50, -- ...plafonné à +50 %
+	GroupId = 0, -- Id de ton groupe Roblox (0 = désactivé)
+	GroupBonus = 0.10, -- +10 % de revenus pour les membres du groupe
+}
+
+---------------------------------------------------------------------------
+-- Boosts personnels (gagnés via cadeaux, quêtes, codes)
+---------------------------------------------------------------------------
+GameConfig.Boosts = {
+	MoneyMultiplier = 2, -- "Argent x2" temporaire
+	MaxStackSeconds = 3600, -- cumul maximum
+}
+
+---------------------------------------------------------------------------
+-- Tempête de la Rift : événement GLOBAL synchronisé sur l'heure UTC
+-- (tous les serveurs en même temps => pics de joueurs, moments à partager)
+---------------------------------------------------------------------------
+GameConfig.Storm = {
+	IntervalMinutes = 60, -- une tempête par heure...
+	OffsetMinutes = 30, -- ...à HH:30 UTC
+	DurationSeconds = 240,
+	WarnSeconds = 300, -- annonce 5 minutes avant
+	LuckMultiplier = 3, -- chance x3 (cumulée avec le pack de chance)
+	SpawnIntervalMultiplier = 0.45, -- ~2x plus de créatures
+	GuaranteedPortal = true, -- un portail doré s'ouvre au début de chaque tempête
+}
+
+---------------------------------------------------------------------------
+-- Vengeance : après un vol, la victime peut se téléporter gratuitement chez le voleur
+---------------------------------------------------------------------------
+GameConfig.Revenge = {
+	WindowSeconds = 90,
+}
+
+---------------------------------------------------------------------------
+-- Récompenses (format commun aux cadeaux, quêtes, codes, tutoriel)
+--   { Type = "Money", Base = n, IncomeMinutes = m }  -> Base x (1 + rebirths) + m minutes de revenus
+--   { Type = "Boost", Seconds = n }                    -> Argent x2 pendant n secondes
+--   { Type = "Creature", Rarities = { Rare = 70, Epic = 30 } } ou { Type = "Creature", Id = "..." }
+--   { Type = "Bundle", Rewards = { ... } }
+---------------------------------------------------------------------------
+
+-- Cadeaux de session : débloqués après X minutes de jeu dans la même session
+GameConfig.Playtime = {
+	Gifts = {
+		{ Minutes = 1, Reward = { Type = "Money", Base = 150, IncomeMinutes = 1 } },
+		{ Minutes = 3, Reward = { Type = "Money", Base = 400, IncomeMinutes = 2 } },
+		{ Minutes = 6, Reward = { Type = "Boost", Seconds = 300 } },
+		{ Minutes = 10, Reward = { Type = "Creature", Rarities = { Rare = 70, Epic = 30 } } },
+		{ Minutes = 15, Reward = { Type = "Money", Base = 2500, IncomeMinutes = 5 } },
+		{ Minutes = 20, Reward = { Type = "Boost", Seconds = 600 } },
+		{ Minutes = 30, Reward = { Type = "Creature", Rarities = { Epic = 80, Legendary = 20 } } },
+		{ Minutes = 45, Reward = { Type = "Money", Base = 10000, IncomeMinutes = 12 } },
+		{ Minutes = 60, Reward = { Type = "Creature", Rarities = { Legendary = 85, Mythic = 15 } } },
+	},
+}
+
+-- Tutoriel (premières minutes) : récompense à la fin
+GameConfig.Tutorial = {
+	Reward = {
+		Type = "Bundle",
+		Rewards = {
+			{ Type = "Money", Base = 400, IncomeMinutes = 0 },
+			{ Type = "Boost", Seconds = 300 },
+		},
+	},
+}
+
+---------------------------------------------------------------------------
+-- Titres affichés au-dessus des joueurs selon leurs rebirths (statut social)
+---------------------------------------------------------------------------
+GameConfig.Titles = {
+	{ Rebirths = 0, Name = "Novice", Color = Color3.fromRGB(200, 200, 215) },
+	{ Rebirths = 1, Name = "Explorateur", Color = Color3.fromRGB(110, 210, 120) },
+	{ Rebirths = 2, Name = "Chasseur de failles", Color = Color3.fromRGB(80, 170, 255) },
+	{ Rebirths = 4, Name = "Voleur d'élite", Color = Color3.fromRGB(180, 100, 255) },
+	{ Rebirths = 7, Name = "Maître des dimensions", Color = Color3.fromRGB(255, 190, 40) },
+	{ Rebirths = 12, Name = "Légende de la Rift", Color = Color3.fromRGB(255, 80, 110) },
+	{ Rebirths = 20, Name = "Divinité dimensionnelle", Color = Color3.fromRGB(40, 255, 210) },
 }
 
 ---------------------------------------------------------------------------

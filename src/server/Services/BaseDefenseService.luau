@@ -112,6 +112,7 @@ local function activate(player: Player): (boolean, string?)
 			deactivate(plot)
 		end
 	end)
+	Services.QuestService.RecordEvent(player, "Barrier", 1)
 	return true, "Barrière activée pour " .. Format.Time(duration) .. " !"
 end
 

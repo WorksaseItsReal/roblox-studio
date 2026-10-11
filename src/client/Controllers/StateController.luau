@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
+local GameConfig = require(Shared.Config.GameConfig)
 local Remotes = require(Shared.Modules.Remotes)
 local Signal = require(Shared.Modules.Signal)
 local Net = require(script.Parent.Net)
@@ -49,7 +50,8 @@ function StateController.GetDimension(): string
 	return (state and state:GetAttribute("Dimension")) or "Lava"
 end
 
-function StateController.GetLuck(): number
+-- Chance achetée (pack de chance) seule
+function StateController.GetPurchasedLuck(): number
 	local state = StateController.GameState
 	if not state then
 		return 1
@@ -59,6 +61,20 @@ function StateController.GetLuck(): number
 		return 1
 	end
 	return state:GetAttribute("LuckMultiplier") or 1
+end
+
+function StateController.IsStormActive(): boolean
+	local state = StateController.GameState
+	return state ~= nil and state:GetAttribute("StormActive") == true
+end
+
+-- Chance effective (pack de chance x tempête), identique au calcul du serveur
+function StateController.GetLuck(): number
+	local luck = StateController.GetPurchasedLuck()
+	if StateController.IsStormActive() then
+		luck *= GameConfig.Storm.LuckMultiplier
+	end
+	return luck
 end
 
 local function setProfile(snapshot)

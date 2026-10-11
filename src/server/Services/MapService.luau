@@ -190,6 +190,16 @@ function MapService.Init(_services)
 		fail("aucune base dans Map.Plots")
 	end
 	print(string.format("[MapService] %d bases, chemin de %.0f studs", #plots, path.Length))
+
+	-- Nuages dynamiques dans le ciel (rendu natif Roblox, aucun asset)
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain and not terrain:FindFirstChildOfClass("Clouds") then
+		local clouds = Instance.new("Clouds")
+		clouds.Cover = 0.55
+		clouds.Density = 0.45
+		clouds.Color = Color3.fromRGB(255, 255, 255)
+		clouds.Parent = terrain
+	end
 end
 
 function MapService.Start() end

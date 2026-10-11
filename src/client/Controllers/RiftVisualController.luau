@@ -130,11 +130,48 @@ function RiftVisualController.Start()
 	collect(map)
 	local portals = map:WaitForChild("Portals")
 
+	-- Tempête : ciel plus sombre, teinte magenta, faille et colonne qui s'emballent, éclairs
+	local stormOn = false
+	local function applyStorm(active: boolean)
+		if active == stormOn then
+			return
+		end
+		stormOn = active
+		tween(atmosphere, { Density = if active then 0.45 else 0.28 }, 2)
+		tween(bloom, { Intensity = if active then 1.2 else 0.7 }, 2)
+		if active then
+			tween(colorCorrection, { TintColor = Color3.fromRGB(255, 200, 235), Contrast = 0.15, Saturation = 0.3 }, 2)
+		else
+			tween(colorCorrection, { Contrast = 0.05, Saturation = 0.12 }, 2)
+			currentDimension = nil -- forcera la teinte de la dimension à être réappliquée
+		end
+		for _, beam in ipairs(tinted.RiftBeam or {}) do
+			tween(beam, { Transparency = if active then 0.6 else 0.86 }, 2)
+		end
+		for _, spinner in spinners do
+			spinner.Speed *= if active then 3 else 1 / 3
+		end
+	end
+
 	local function refresh()
+		local state = StateController.GameState
+		applyStorm(state ~= nil and state:GetAttribute("StormActive") == true)
 		applyDimension(StateController.GetDimension())
 	end
 	StateController.GameStateChanged:Connect(refresh)
 	refresh()
+
+	-- Éclairs pendant la tempête
+	task.spawn(function()
+		while true do
+			task.wait(2 + math.random() * 4)
+			if stormOn then
+				local brightness = colorCorrection.Brightness
+				colorCorrection.Brightness = brightness + 0.45
+				tween(colorCorrection, { Brightness = brightness }, 0.35)
+			end
+		end
+	end)
 
 	RunService.RenderStepped:Connect(function()
 		local t = os.clock()

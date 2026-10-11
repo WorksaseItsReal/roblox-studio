@@ -146,6 +146,20 @@ local function buy(player: Player, spawnId: string): (boolean, string?, any)
 
 	local def = Creatures.Get(entry.Id)
 	local rarity = def and Rarities.Get(def.Rarity)
+	Services.QuestService.RecordEvent(player, "Buy", 1)
+	if rarity and rarity.Tier >= 2 then
+		Services.QuestService.RecordEvent(player, "BuyRare", 1)
+	end
+	if rarity and rarity.Tier >= 3 then
+		Services.NotificationService.Effect(player, "Celebrate", { Color = rarity.Color, Text = rarity.Name .. " !" })
+	end
+	if rarity and def and rarity.Tier >= 4 then
+		Services.NotificationService.Feed(
+			string.format("%s a acheté %s (%s)", player.DisplayName, def.Name, rarity.Name),
+			rarity.Color,
+			"💰"
+		)
+	end
 	if spawn.IsSecret and def then
 		Services.NotificationService.Announce(
 			player.DisplayName .. " a capturé une Secrète !",

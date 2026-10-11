@@ -18,6 +18,8 @@ local Theme = require(script.Parent.Theme)
 local UIKit = require(script.Parent.UIKit)
 local HUD = require(script.Parent.HUD)
 local Notifications = require(script.Parent.Notifications)
+local Feed = require(script.Parent.Feed)
+local RunService = game:GetService("RunService")
 
 local Panels = script.Parent.Panels
 local PANEL_MODULES = {
@@ -30,9 +32,15 @@ local PANEL_MODULES = {
 	Daily = require(Panels.DailyPanel),
 	Leaderboard = require(Panels.LeaderboardPanel),
 	Shop = require(Panels.ShopPanel),
+	Quests = require(Panels.QuestsPanel),
+	Gifts = require(Panels.GiftsPanel),
+	Codes = require(Panels.CodesPanel),
 }
 
 local UIController = {}
+
+-- Accès aux modules de panneaux (le HUD s'en sert pour ses pastilles rouges)
+UIController.Panels = PANEL_MODULES
 
 local WINDOW_SIZE = Vector2.new(780, 560)
 
@@ -50,6 +58,10 @@ function UIController.IsOpen(name: string): boolean
 	return openName == name
 end
 
+function UIController.IsAnyOpen(): boolean
+	return openName ~= nil
+end
+
 function UIController.Close()
 	if openName and panels[openName] then
 		panels[openName].Frame.Visible = false
@@ -57,6 +69,7 @@ function UIController.Close()
 	openName = nil
 	window.Visible = false
 	overlay.Visible = false
+	Feed.SetVisible(true)
 end
 
 function UIController.Open(name: string, arg: any?)
@@ -85,6 +98,7 @@ function UIController.Open(name: string, arg: any?)
 	panel.Frame.Visible = true
 	window.Visible = true
 	overlay.Visible = true
+	Feed.SetVisible(false)
 	if not wasOpen then
 		windowScale.Scale = 0.7
 		TweenService:Create(windowScale, TweenInfo.new(0.32, Enum.EasingStyle.Back), { Scale = 1 }):Play()
@@ -232,10 +246,12 @@ function UIController.Start(ctx)
 	setupScaling(root)
 
 	ctx.UI = UIController
+	ctx.Root = root
 	ctx.Toast = Notifications.Toast
 	ctx.Net.Toast = Notifications.Toast
 
 	HUD.Create(root, ctx)
+	Feed.Create(root)
 	buildWindow(root)
 	Notifications.Create(root)
 
@@ -272,6 +288,20 @@ function UIController.Start(ctx)
 	end)
 	ctx.State.OpenPanelRequested:Connect(function(name: string, arg: any)
 		UIController.Open(name, arg)
+	end)
+
+	-- Comptes à rebours : le panneau ouvert peut définir Tick() (appelé chaque seconde)
+	local accumulator = 0
+	RunService.Heartbeat:Connect(function(dt)
+		accumulator += dt
+		if accumulator < 1 then
+			return
+		end
+		accumulator = 0
+		local panel = openName and panels[openName]
+		if panel and panel.Instance.Tick then
+			panel.Instance.Tick()
+		end
 	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)

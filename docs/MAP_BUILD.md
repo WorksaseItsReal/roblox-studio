@@ -38,6 +38,8 @@ Workspace
     │       ├── FusionPortal     (Part)  + ProximityPrompt "FusionPrompt"
     │       ├── Sign             (Part, optionnel) + SurfaceGui "SignGui" > TextLabel "Text"
     │       └── Slots (Folder)   Slot1 ... Slot28 (Parts, face du haut = où se pose la créature)
+    ├── Boards (Folder, optionnel)   tableaux de classement remplis par le client :
+    │     MoneyBoard, StealsBoard (Parts) + SurfaceGui "BoardGui" > Frame > Frame "Rows"
     └── (Movers, Portals : créés automatiquement)
 ```
 

@@ -64,14 +64,14 @@ function Notifications.Toast(text: string, kind: string?)
 	})
 	TweenService:Create(toast, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Position = UDim2.new() }):Play()
 
-	-- Maximum 5 toasts à l'écran
+	-- Maximum 4 toasts à l'écran
 	local toasts = {}
 	for _, child in toastHolder:GetChildren() do
 		if child:IsA("Frame") then
 			table.insert(toasts, child)
 		end
 	end
-	if #toasts > 5 then
+	if #toasts > 4 then
 		table.sort(toasts, function(a, b)
 			return a.LayoutOrder < b.LayoutOrder
 		end)
@@ -128,7 +128,7 @@ function Notifications.Create(root: Frame)
 		Name = "Toasts",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -18, 1, -18),
+		Position = UDim2.new(1, -112, 1, -18), -- à gauche du rail de récompenses
 		Size = UDim2.fromOffset(340, 520),
 		ZIndex = 30,
 		Parent = root,

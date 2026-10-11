@@ -70,6 +70,11 @@ local lighting = game:GetService("Lighting")
 lighting.ClockTime = 14.5
 lighting.Brightness = 2.6
 lighting.GlobalShadows = true
+-- "Future" : éclairage le plus beau (lumières dynamiques, néons). Roblox réduit
+-- automatiquement la qualité sur les appareils modestes.
+pcall(function()
+	lighting.Technology = roblox.Enum.Technology.Future
+end)
 lighting.EnvironmentDiffuseScale = 1
 lighting.EnvironmentSpecularScale = 1
 lighting.Ambient = roblox.Color3.fromRGB(110, 90, 80)
