@@ -169,8 +169,11 @@ end
 	  Compact      : écran peu haut (téléphone) -> toasts et bannière moins larges
 	  RightOffset  : écart entre les toasts et le bord droit (bouton de saut tactile)
 	  BottomOffset : écart entre les toasts et le bas de l'écran
+	  TopOffset    : bas de la pile du haut du HUD (la bannière se place dessous)
 ]]
-function Notifications.ApplyLayout(info: { Compact: boolean, RightOffset: number, BottomOffset: number })
+function Notifications.ApplyLayout(
+	info: { Compact: boolean, RightOffset: number, BottomOffset: number, TopOffset: number }
+)
 	if not toastHolder or not bannerFrame then
 		return
 	end
@@ -181,6 +184,7 @@ function Notifications.ApplyLayout(info: { Compact: boolean, RightOffset: number
 	-- Téléphone : 2 toasts au plus (au-delà, la pile monterait jusqu'à la bulle « Cadeau prêt »)
 	maxToasts = if info.Compact then 2 else 4
 	bannerFrame.Size = UDim2.fromOffset(BANNER_WIDTH, 104)
+	bannerFrame.Position = UDim2.new(0.5, 0, 0, info.TopOffset + 12)
 end
 
 function Notifications.Create(root: Frame)
@@ -203,11 +207,11 @@ function Notifications.Create(root: Frame)
 	)
 
 	-- Grande bannière centrale (annonces globales) : plaque de la couleur de l'annonce,
-	-- sous la pilule d'événement
+	-- sous les boutons du haut et la pilule d'événement (voir ApplyLayout)
 	bannerPlate = UIKit.Plate({
 		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 62),
+		Position = UDim2.new(0.5, 0, 0, 122),
 		Size = UDim2.fromOffset(BANNER_WIDTH, 104),
 		Visible = false,
 		ZIndex = 40,

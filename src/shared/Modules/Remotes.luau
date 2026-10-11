@@ -35,6 +35,7 @@ Remotes.FunctionNames = {
 	"ClaimGift",
 	"RedeemCode",
 	"CompleteTutorial",
+	"Teleport", -- téléportation rapide : "Rift" (esplanade) ou "Base" (sa base)
 }
 
 -- Serveur -> Client

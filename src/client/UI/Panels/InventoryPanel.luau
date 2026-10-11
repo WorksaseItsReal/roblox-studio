@@ -28,7 +28,7 @@ function InventoryPanel.Create(content: Frame, ctx)
 		Parent = top,
 	})
 	UIKit.Button({
-		Text = "🌀 Fusion",
+		Text = "⚗️ Fusion",
 		Color = "Blue",
 		TextSize = 19,
 		AnchorPoint = Vector2.new(1, 0),

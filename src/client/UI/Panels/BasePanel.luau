@@ -14,7 +14,7 @@ local Widgets = require(script.Parent.Parent.Widgets)
 
 local BasePanel = {}
 BasePanel.Title = "Améliorations"
-BasePanel.Icon = "🏰"
+BasePanel.Icon = "🛠️"
 
 local ICONS = { Slots = "🧩", Barrier = "🛡️", Alarm = "🚨" }
 -- Couleur selon le sens : emplacements = infos, barrière = défense, alarme = avertissement

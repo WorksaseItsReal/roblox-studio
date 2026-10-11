@@ -165,6 +165,7 @@ GameConfig.Index = {
 GameConfig.Movement = {
 	BaseWalkSpeed = 16,
 	SpeedPassMultiplier = 1.5,
+	TeleportCooldown = 5, -- secondes entre deux téléportations rapides (boutons Rift / Ma base)
 }
 
 ---------------------------------------------------------------------------
@@ -214,6 +215,7 @@ GameConfig.RateLimits = {
 	ClaimGift = { Rate = 1, Burst = 4 },
 	RedeemCode = { Rate = 0.3, Burst = 3 }, -- strict : empêche de tester des codes en masse
 	CompleteTutorial = { Rate = 0.2, Burst = 2 },
+	Teleport = { Rate = 0.5, Burst = 2 },
 }
 
 ---------------------------------------------------------------------------

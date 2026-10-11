@@ -2,8 +2,8 @@
 	TutorialController
 	==================
 	Tutoriel des premières minutes (le moment qui décide si un joueur reste) :
-	  1. Acheter une créature sur le tapis   (flèche vers la créature la plus proche)
-	  2. Aller voir sa base                  (flèche vers sa base)
+	  1. Acheter une créature sur le tapis   (flèche vers la créature ; bouton Rift entouré)
+	  2. Aller voir sa base                  (flèche vers sa base ; bouton Ma base entouré)
 	  3. Comprendre la barrière              (le bouton est mis en évidence)
 	  4. Comprendre le vol                   (flèche vers la base d'un adversaire)
 	Une flèche lumineuse (Beam) relie le joueur à la cible ; une bulle explique.
@@ -135,19 +135,23 @@ function TutorialController.Start(ctx)
 		return
 	end
 
+	-- Textes : espaces insécables (\u{A0}) devant « ! » et « : » et dans les guillemets,
+	-- pour qu'aucun signe ne se retrouve seul en début de ligne
 	local steps = {
 		{
-			Text = "Les créatures sortent de la Rift ! Approche-toi du tapis et "
+			Text = "Les créatures sortent de la Rift\u{A0}! Va au tapis (bouton «\u{A0}Rift\u{A0}» en haut) et "
 				.. actionText()
 				.. " pour en acheter une.",
 			Target = nearestConveyorCreature,
+			Highlight = "Rift",
 			Done = function(p)
 				return p.Stats.Bought >= 1
 			end,
 		},
 		{
-			Text = "Bravo ! Elle part dans TA base et te rapporte de l'argent chaque seconde. Va la voir !",
+			Text = "Bravo\u{A0}! Elle part dans TA base et te rapporte de l'argent chaque seconde. Va la voir\u{A0}: bouton «\u{A0}Ma\u{A0}base\u{A0}»\u{A0}!",
 			Target = myPlotPosition,
+			Highlight = "Base",
 			Done = function()
 				local position, target = rootPosition(), myPlotPosition()
 				return position ~= nil and target ~= nil and (position - target).Magnitude < 35
@@ -155,14 +159,14 @@ function TutorialController.Start(ctx)
 			Timeout = 30,
 		},
 		{
-			Text = "Attention, les autres joueurs peuvent te VOLER ! Active ta barrière (bouton rouge) quand un voleur approche.",
-			HighlightBarrier = true,
+			Text = "Attention, les autres joueurs peuvent te VOLER\u{A0}! Active ta barrière (bouton rouge) quand un voleur approche.",
+			Highlight = "Barrier",
 			Button = "Compris !",
 		},
 		{
-			Text = "À toi de jouer : entre dans une base adverse, "
+			Text = "À toi de jouer\u{A0}: entre dans une base adverse, "
 				.. actionText()
-				.. " longtemps sur une créature et ramène-la chez toi !",
+				.. " longtemps sur une créature et ramène-la chez toi\u{A0}!",
 			Target = enemyPlotPosition,
 			Button = "C'est parti ! 🎁",
 			Final = true,
@@ -170,19 +174,20 @@ function TutorialController.Start(ctx)
 	}
 
 	---------------------------------------------------------------- Interface
-	local root = ctx.Root
-	-- Carte blanche en haut, sous la pilule d'événement : le bas de l'écran reste libre
-	-- pour le bandeau de vol, la vengeance et la barrière (utilisés pendant le tutoriel).
-	-- Assez étroite pour ne jamais toucher le fil d'actualité (en haut à droite).
+	-- Carte blanche en haut, sous les boutons du HUD et la pilule d'événement (ancre
+	-- fournie par le HUD) : le bas de l'écran reste libre pour le bandeau de vol, la
+	-- vengeance et la barrière. Assez étroite pour ne jamais toucher le fil d'actualité.
+	local anchor = HUD.GetTopAnchor()
+	local restY = if anchor then 0 else 124
 	local card = UIKit.New("Frame", {
 		Name = "Tutorial",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 60),
+		Position = UDim2.new(if anchor then 0 else 0.5, 0, 0, restY),
 		Size = UDim2.fromOffset(500, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 15,
-		Parent = root,
+		Parent = anchor or ctx.Root,
 	})
 	UIKit.Corner(card, 16)
 	UIKit.Stroke(card, 3)
@@ -247,12 +252,13 @@ function TutorialController.Start(ctx)
 	})
 	local nextButton
 
-	-- Mise en évidence du bouton de barrière : anneau doré autour du vrai bouton
+	-- Mise en évidence d'un bouton du HUD (Rift, Ma base, barrière) : anneau doré autour
+	-- du vrai bouton
 	local highlight = UIKit.New("Frame", {
-		Name = "BarrierHighlight",
+		Name = "TutorialHighlight",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, 18, 1, 18),
+		Size = UDim2.new(1, 14, 1, 14),
 		BackgroundTransparency = 1,
 		Visible = false,
 		ZIndex = 8,
@@ -349,9 +355,13 @@ function TutorialController.Start(ctx)
 			nextButton:SetText(step.Button)
 		end
 		-- Étape de la barrière : le HUD affiche le bouton même hors de la base
-		local barrier = HUD.SetBarrierHint(step.HighlightBarrier == true)
-		highlight.Parent = if step.HighlightBarrier then barrier else nil
-		highlight.Visible = step.HighlightBarrier == true
+		local barrier = HUD.SetBarrierHint(step.Highlight == "Barrier")
+		local target = if step.Highlight == "Barrier"
+			then barrier
+			elseif step.Highlight then HUD.GetTopButton(step.Highlight)
+			else nil
+		highlight.Parent = target
+		highlight.Visible = target ~= nil
 		UIKit.Pop(card, 0.9)
 	end
 
@@ -402,7 +412,7 @@ function TutorialController.Start(ctx)
 			beam.Enabled = false
 			marker.Enabled = false
 		end
-		if step.HighlightBarrier then
+		if step.Highlight then
 			highlightScale.Scale = 1 + math.abs(math.sin(os.clock() * 4)) * 0.05
 		end
 		-- Étape terminée ?
@@ -416,7 +426,7 @@ function TutorialController.Start(ctx)
 
 	-- Petite animation d'attention sur la carte
 	TweenService:Create(card, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-		Position = UDim2.new(0.5, 0, 0, 56),
+		Position = UDim2.new(card.Position.X.Scale, 0, 0, restY - 4),
 	}):Play()
 end
 

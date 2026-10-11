@@ -16,7 +16,7 @@ local Widgets = require(script.Parent.Parent.Widgets)
 
 local FusionPanel = {}
 FusionPanel.Title = "Portail de fusion"
-FusionPanel.Icon = "🌀"
+FusionPanel.Icon = "⚗️"
 
 -- Signe "+" ou "=" de la formule
 local function formulaSign(parent: Instance, text: string, x: number)
@@ -174,7 +174,7 @@ function FusionPanel.Create(content: Frame, ctx)
 		if count == 0 and not empty then
 			local message = Widgets.Empty(
 				content,
-				"🌀",
+				"⚗️",
 				"Aucune créature à fusionner.\nIl te faut 2 exemplaires non mutés de la même créature."
 			)
 			message.Position = UDim2.fromOffset(0, 124)

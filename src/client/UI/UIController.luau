@@ -186,9 +186,10 @@ local function setupLayout(root: Frame, padding: UIPadding)
 			end
 		end
 
-		-- L'argent passe sous les boutons Roblox du haut
-		HUD.ApplyLayout({
+		-- Le Sac (et l'argent sur écran tactile) passe sous les boutons Roblox du haut
+		local topStackBottom = HUD.ApplyLayout({
 			Compact = compact,
+			Touch = UserInputService.TouchEnabled,
 			LeftOffset = math.max(8, math.ceil(topInset() / value) - padding.PaddingTop.Offset + 8),
 		})
 
@@ -208,7 +209,12 @@ local function setupLayout(root: Frame, padding: UIPadding)
 				toastBottom = math.max(toastBottom, jumpHeight)
 			end
 		end
-		Notifications.ApplyLayout({ Compact = compact, RightOffset = toastRight, BottomOffset = toastBottom })
+		Notifications.ApplyLayout({
+			Compact = compact,
+			RightOffset = toastRight,
+			BottomOffset = toastBottom,
+			TopOffset = topStackBottom,
+		})
 	end
 	local camera = workspace.CurrentCamera
 	if camera then

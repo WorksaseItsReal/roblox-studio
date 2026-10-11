@@ -19,9 +19,9 @@ local Feed = {}
 
 local MAX_ENTRIES = 3
 local LIFETIME = 9
--- Largeur maximale du texte : la pilule la plus large ne touche jamais la carte du
--- tutoriel (centrée en haut). La bannière d'annonce, elle, masque le fil.
-local MAX_TEXT_WIDTH = 290
+-- Largeur maximale du texte : la pilule la plus large ne touche ni les boutons du haut
+-- ni la carte du tutoriel (centrés). La bannière d'annonce, elle, masque le fil.
+local MAX_TEXT_WIDTH = 280
 
 local holder: Frame
 local counter = 0

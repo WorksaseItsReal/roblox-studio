@@ -1,17 +1,21 @@
 --[[
 	HUD
 	===
-	Peu d'éléments, un style par type d'élément (voir docs/ART_DIRECTION.md, section 2) :
-	- Haut gauche : argent (Luckiest Guy, sans cadre) + revenu/s en or ; dessous, une
-	                petite ligne (bonus d'amis, boost x2) seulement quand ils sont actifs
-	- Haut centre : UNE pilule d'événement sombre (dimension + minuteur, tempête proche,
-	                chance)
-	- Gauche      : grille 2 x 3 de tuiles blanches identiques ; « Plus » ouvre un tiroir
-	                (Fusion, Base, Portail, Classement, Cadeaux, Quotidien, Codes, Inviter).
-	                Pastille rouge « ! » sur la tuile concernée (ou sur Plus).
-	- Droite      : rien en permanence ; bulle or « Cadeau prêt ! » quand c'est réclamable
-	- Bas centre  : uniquement contextuel : barrière (dans sa base ou juste après une
-	                alerte), bandeau de vol, vengeance
+	Disposition façon Grow a Garden, style v3 « propre » (voir docs/ART_DIRECTION.md) :
+	- Haut centre  : LES 3 gros boutons du jeu, identiques : Rift (téléportation sur
+	                 l'esplanade où sortent les créatures), Ma base (téléportation chez soi),
+	                 Boutique. Dessous, une petite pilule d'événement (dimension + minuteur,
+	                 tempête proche, chance).
+	- Haut gauche  : le Sac (ouvre les créatures).
+	- Gauche       : colonne de tuiles identiques : Index, Quêtes, Rebirth, Plus (tiroir :
+	                 Fusion, Base, Portail, Classement, Cadeaux, Quotidien, Codes, Inviter).
+	                 Pastille rouge « ! » sur la tuile concernée (ou sur Plus).
+	- Bas gauche   : l'argent (gros chiffre Luckiest Guy) et le revenu/s dessous. Sur écran
+	                 tactile : en haut à gauche, à côté du Sac (le bas gauche est la zone du
+	                 joystick de Roblox).
+	- Droite       : fil d'actualité ; bulle or « Cadeau prêt ! » quand c'est réclamable.
+	- Bas centre   : uniquement contextuel : barrière (dans sa base ou juste après une
+	                 alerte), bandeau de vol, vengeance.
 ]]
 
 local Players = game:GetService("Players")
@@ -37,20 +41,33 @@ local player = Players.LocalPlayer
 local TILE = 72 -- côté des tuiles
 local GAP_X = 12
 local GAP_Y = 22 -- place du libellé sous chaque tuile
-local MENU_SIZE = Vector2.new(2 * TILE + GAP_X, 3 * TILE + 2 * GAP_Y)
+local COLUMN_HEIGHT = 4 * TILE + 3 * GAP_Y
 local DRAWER_COLUMNS = 4
 local DRAWER_PADDING = 14
 local DRAWER_SIZE = Vector2.new(
 	2 * DRAWER_PADDING + DRAWER_COLUMNS * TILE + (DRAWER_COLUMNS - 1) * GAP_X,
 	DRAWER_PADDING + 2 * TILE + 2 * GAP_Y + 4
 )
+-- Boutons du haut (plus hauts sur téléphone : cibles tactiles confortables)
+local TOP_TOP = 4
+local TOP_GAP = 12
+local TOP_SIZE = Vector2.new(164, 64)
+local TOP_SIZE_COMPACT = Vector2.new(172, 72)
+local EVENT_HEIGHT = 34
 local BOTTOM_MARGIN = 14 -- pile du bas (barrière, bandeau de vol, vengeance)
 local STACK_GAP = 12
 local ALERT_SECONDS = 20 -- la barrière reste proposée après une alerte d'intrusion ou de vol
+-- Position verticale de la bulle « Cadeau prêt ! » : sous le fil d'actualité, même
+-- quand ses 3 pilules font deux lignes
+local GIFT_TOP = 236
 
-local MENU = {
+local TOP = {
+	{ Id = "Rift", Text = "Rift", Icon = "🌀" },
+	{ Id = "Base", Text = "Ma base", Icon = "🏠" },
 	{ Id = "Shop", Text = "Boutique", Icon = "🛒" },
-	{ Id = "Inventory", Text = "Créatures", Icon = "🐾" },
+}
+
+local COLUMN = {
 	{ Id = "Index", Text = "Index", Icon = "📖" },
 	{ Id = "Quests", Text = "Quêtes", Icon = "📜" },
 	{ Id = "Rebirth", Text = "Rebirth", Icon = "🔁" },
@@ -58,8 +75,8 @@ local MENU = {
 }
 
 local DRAWER = {
-	{ Id = "Fusion", Text = "Fusion", Icon = "🌀" },
-	{ Id = "Base", Text = "Base", Icon = "🏰" },
+	{ Id = "Fusion", Text = "Fusion", Icon = "⚗️" },
+	{ Id = "Base", Text = "Améliorer", Icon = "🛠️" },
 	{ Id = "Shortcut", Text = "Portail", Icon = "🌠" },
 	{ Id = "Leaderboard", Text = "Classement", Icon = "🏆" },
 	{ Id = "Gifts", Text = "Cadeaux", Icon = "🎁" },
@@ -70,20 +87,25 @@ local DRAWER = {
 
 -- Éléments partagés avec ApplyLayout, SetDrawerOpen et le tutoriel
 local refs: {
+	Top: Frame?,
+	TopButtons: { [string]: Frame },
+	Event: Frame?,
+	TopAnchor: Frame?,
+	Bag: Frame?,
 	Money: Frame?,
-	Menu: Frame?,
+	MoneyList: UIListLayout?,
+	Column: Frame?,
 	Drawer: Frame?,
 	Catcher: TextButton?,
 	MoreIcon: TextLabel?,
 	MoreBadge: Frame?,
 	Barrier: Frame?,
 } =
-	{}
+	{ TopButtons = {} }
 local drawerOpen = false
 local barrierHint = false
--- Position verticale de la bulle « Cadeau prêt ! » : sous le fil d'actualité, même
--- quand ses 3 pilules font deux lignes
-local GIFT_TOP = 236
+-- Bas de la pile du haut (boutons + pilule d'événement), en unités d'interface
+local topStackBottom = TOP_TOP + TOP_SIZE.Y + 8 + EVENT_HEIGHT
 
 local function findMyPlot(): Instance?
 	local map = workspace:FindFirstChild("Map")
@@ -173,90 +195,173 @@ function HUD.SetBarrierHint(enabled: boolean): Frame?
 	return refs.Barrier
 end
 
+-- Tutoriel : cadre d'un des 3 boutons du haut ("Rift", "Base", "Shop"), pour l'entourer
+function HUD.GetTopButton(id: string): Frame?
+	return refs.TopButtons[id]
+end
+
+--[[
+	Point d'ancrage centré juste sous la pile du haut (boutons + pilule d'événement) :
+	le tutoriel y accroche sa carte, qui suit ainsi la disposition (téléphone, PC).
+]]
+function HUD.GetTopAnchor(): Frame?
+	return refs.TopAnchor
+end
+
+-- Bas de la pile du haut, en unités d'interface (bannière d'annonce dessous)
+function HUD.GetTopStackBottom(): number
+	return topStackBottom
+end
+
+--[[
+	Gros bouton du haut : dégradé bleu (navigation), rebord, contour encre, pastille
+	blanche avec l'icône et libellé blanc à contour, le groupe centré. Les 3 sont
+	identiques.
+]]
+local function topButton(item, order: number, parent: Instance, onClick: () -> (), onBlocked: () -> ())
+	local button = UIKit.Button({
+		Name = item.Id,
+		Text = item.Text,
+		Color = "Blue",
+		TextSize = 21,
+		Size = UDim2.fromOffset(TOP_SIZE.X, TOP_SIZE.Y),
+		Radius = 16,
+		Depth = 5,
+		StrokeThickness = 3,
+		Fit = false,
+		LayoutOrder = order,
+		Parent = parent,
+		OnClick = onClick,
+		OnBlocked = onBlocked,
+	})
+	-- Icône + libellé centrés ensemble, quelle que soit la longueur du libellé
+	local content = UIKit.New("Frame", {
+		Name = "Content",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(0, 40),
+		AutomaticSize = Enum.AutomaticSize.X,
+		ZIndex = button.Face.ZIndex + 1,
+		Parent = button.Face,
+	})
+	UIKit.List(content, Enum.FillDirection.Horizontal, 7, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local badge = UIKit.New("Frame", {
+		Name = "IconBadge",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.fromOffset(40, 40),
+		LayoutOrder = 1,
+		ZIndex = content.ZIndex,
+		Parent = content,
+	})
+	UIKit.Round(badge)
+	UIKit.Stroke(badge, 2.5)
+	UIKit.Text({
+		Name = "Glyph",
+		Text = item.Icon,
+		TextSize = 24,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Stroke = 0,
+		ZIndex = badge.ZIndex + 1,
+		Parent = badge,
+	})
+	local label = button.Label
+	label.AutomaticSize = Enum.AutomaticSize.X
+	label.Size = UDim2.fromOffset(0, 30)
+	label.LayoutOrder = 2
+	label.ZIndex = content.ZIndex
+	label.Parent = content
+	-- Recharge de la téléportation : voile qui se retire de gauche à droite
+	local cooldown = UIKit.New("Frame", {
+		Name = "Cooldown",
+		BackgroundColor3 = Theme.Ink,
+		BackgroundTransparency = 0.7,
+		Size = UDim2.fromScale(0, 1),
+		Visible = false,
+		ZIndex = button.Face.ZIndex + 3,
+		Parent = button.Face,
+	})
+	UIKit.Corner(cooldown, 16)
+	return button, cooldown
+end
+
 function HUD.Create(root: Frame, ctx)
 	local State = ctx.State
 	local Panels = ctx.UI.Panels
 
-	-------------------------------------------------- Argent (haut gauche, sans cadre)
-	local money = UIKit.New("Frame", {
-		Name = "Money",
+	-------------------------------------------------- Boutons du haut (le cœur du HUD)
+	local top = UIKit.New("Frame", {
+		Name = "Top",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(8, 16),
-		Size = UDim2.fromOffset(420, 100),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, TOP_TOP),
+		Size = UDim2.fromOffset(3 * TOP_SIZE.X + 2 * TOP_GAP, TOP_SIZE.Y),
 		Parent = root,
 	})
-	UIKit.Text({
-		Name = "Icon",
-		Text = "💵",
-		TextSize = 38,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextWrapped = false,
-		Position = UDim2.fromOffset(0, 3),
-		Size = UDim2.fromOffset(50, 46),
-		Stroke = 0,
-		Parent = money,
-	})
-	local moneyLabel = UIKit.Text({
-		Name = "Amount",
-		Text = "$0",
-		Font = Theme.DisplayFont,
-		TextSize = 46,
-		TextWrapped = false,
-		Position = UDim2.fromOffset(56, 0),
-		Size = UDim2.new(1, -56, 0, 52),
-		Stroke = 3.5,
-		Fit = true,
-		Parent = money,
-	})
-	UIKit.Gradient(moneyLabel, Color3.fromRGB(160, 248, 140), Theme.Money)
-	local incomeLabel = UIKit.Text({
-		Name = "Income",
-		Text = "+$0/s",
-		TextSize = 21,
-		TextColor3 = Theme.Gold,
-		TextWrapped = false,
-		Position = UDim2.fromOffset(58, 50),
-		Size = UDim2.new(1, -58, 0, 26),
-		Stroke = 2,
-		Parent = money,
-	})
-	-- Bonus actifs (amis, boost x2) : une petite ligne, seulement quand il y en a
-	local bonusLabel = UIKit.Text({
-		Name = "Bonus",
-		Text = "",
-		TextSize = 15,
-		TextWrapped = false,
-		Position = UDim2.fromOffset(59, 76),
-		Size = UDim2.new(1, -59, 0, 20),
-		Stroke = 1.5,
-		Visible = false,
-		Parent = money,
-	})
-	local moneyScale = UIKit.New("UIScale", { Parent = moneyLabel })
-	refs.Money = money
+	UIKit.List(top, Enum.FillDirection.Horizontal, TOP_GAP, Enum.HorizontalAlignment.Center)
+	refs.Top = top
 
-	-------------------------------------------------- Pilule d'événement (haut centre)
+	-- Téléportations : une à la fois, puis recharge (le serveur a le dernier mot)
+	local teleportPending = false
+	local teleportReadyAt = 0
+	local function teleport(destination: string)
+		if teleportPending or os.clock() < teleportReadyAt then
+			return
+		end
+		teleportPending = true
+		local response = ctx.Net.Request("Teleport", destination)
+		teleportPending = false
+		if response.Ok then
+			teleportReadyAt = os.clock() + GameConfig.Movement.TeleportCooldown
+		end
+	end
+	local function refuseWhileCarrying()
+		ctx.Toast("Impossible de te téléporter en portant une créature volée !", "Error")
+	end
+
+	local teleportButtons = {}
+	local cooldownFills = {}
+	for order, item in TOP do
+		local button, cooldown = topButton(item, order, top, function()
+			HUD.SetDrawerOpen(false)
+			if item.Id == "Shop" then
+				ctx.UI.Toggle("Shop")
+			else
+				teleport(item.Id)
+			end
+		end, refuseWhileCarrying)
+		refs.TopButtons[item.Id] = button.Instance
+		if item.Id ~= "Shop" then
+			table.insert(teleportButtons, button)
+			table.insert(cooldownFills, cooldown)
+		end
+	end
+
+	-------------------------------------------------- Pilule d'événement (sous les boutons)
 	local event = UIKit.New("Frame", {
 		Name = "Event",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 4),
-		Size = UDim2.fromOffset(0, 42),
+		Position = UDim2.new(0.5, 0, 0, TOP_TOP + TOP_SIZE.Y + 8),
+		Size = UDim2.fromOffset(0, EVENT_HEIGHT),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = Theme.Hud,
 		BackgroundTransparency = Theme.HudTransparency,
 		Parent = root,
 	})
 	UIKit.Round(event)
-	UIKit.Padding(event, 0, 8, 0, 18)
-	UIKit.List(event, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	UIKit.Padding(event, 0, 6, 0, 14)
+	UIKit.List(event, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	refs.Event = event
 	-- Texte d'un segment (icône + nom), largeur automatique
 	local function segment(order: number): TextLabel
 		return UIKit.Text({
 			Text = "",
-			TextSize = 20,
+			TextSize = 17,
 			TextWrapped = false,
 			AutomaticSize = Enum.AutomaticSize.X,
-			Size = UDim2.fromOffset(0, 28),
+			Size = UDim2.fromOffset(0, 24),
 			Stroke = 0,
 			LayoutOrder = order,
 			Parent = event,
@@ -269,15 +374,15 @@ function HUD.Create(root: Frame, ctx)
 			Name = "Timer",
 			BackgroundColor3 = Color3.new(1, 1, 1),
 			BackgroundTransparency = 0.86,
-			Size = UDim2.fromOffset(width, 28),
+			Size = UDim2.fromOffset(width, 24),
 			LayoutOrder = order,
 			Parent = event,
 		})
-		UIKit.Corner(chip, 9)
+		UIKit.Corner(chip, 8)
 		return chip,
 			UIKit.Text({
 				Text = "",
-				TextSize = 19,
+				TextSize = 16,
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextWrapped = false,
 				Size = UDim2.fromScale(1, 1),
@@ -291,27 +396,120 @@ function HUD.Create(root: Frame, ctx)
 			BackgroundColor3 = Color3.new(1, 1, 1),
 			BackgroundTransparency = 0.6,
 			BorderSizePixel = 0,
-			Size = UDim2.fromOffset(2, 20),
+			Size = UDim2.fromOffset(2, 16),
 			LayoutOrder = order,
 			Parent = event,
 		})
 	end
 	local dimName = segment(1)
-	local _, dimTime = timer(2, 54)
+	local _, dimTime = timer(2, 48)
 	local stormDivider = divider(3)
 	local stormName = segment(4)
-	local stormChip, stormTime = timer(5, 60)
+	local stormChip, stormTime = timer(5, 52)
 	local luckDivider = divider(6)
 	local luckName = segment(7)
-	local luckChip, luckTime = timer(8, 60)
+	local luckChip, luckTime = timer(8, 52)
 
-	-------------------------------------------------- Menu (gauche) + tiroir « Plus »
-	local menu = UIKit.New("Frame", {
+	-- Ancre du tutoriel, centrée sous la pilule
+	refs.TopAnchor = UIKit.New("Frame", {
+		Name = "TopAnchor",
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5, 0, 0, topStackBottom + 12),
+		Size = UDim2.fromOffset(0, 0),
+		Parent = root,
+	})
+
+	-------------------------------------------------- Sac (haut gauche)
+	local bag = UIKit.IconButton({
+		Name = "Bag",
+		Icon = "🎒",
+		Text = "Sac",
+		Parent = root,
+		OnClick = function()
+			HUD.SetDrawerOpen(false)
+			ctx.UI.Toggle("Inventory")
+		end,
+	})
+	bag.Instance.Position = UDim2.fromOffset(8, 16)
+	refs.Bag = bag.Instance
+
+	-------------------------------------------------- Argent (bas gauche, sans cadre)
+	local money = UIKit.New("Frame", {
+		Name = "Money",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 8, 1, -8),
+		Size = UDim2.fromOffset(400, 104),
+		Parent = root,
+	})
+	refs.MoneyList =
+		UIKit.List(money, Enum.FillDirection.Vertical, 0, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Bottom)
+	local amountRow = UIKit.New("Frame", {
+		Name = "AmountRow",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 54),
+		LayoutOrder = 1,
+		Parent = money,
+	})
+	UIKit.Text({
+		Name = "Icon",
+		Text = "💵",
+		TextSize = 40,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, 3),
+		Size = UDim2.fromOffset(52, 48),
+		Stroke = 0,
+		Parent = amountRow,
+	})
+	local moneyLabel = UIKit.Text({
+		Name = "Amount",
+		Text = "$0",
+		Font = Theme.DisplayFont,
+		TextSize = 50,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(58, 0),
+		Size = UDim2.new(1, -58, 1, 0),
+		Stroke = 3.5,
+		Fit = true,
+		Parent = amountRow,
+	})
+	UIKit.Gradient(moneyLabel, Color3.fromRGB(160, 248, 140), Theme.Money)
+	local incomeLabel = UIKit.Text({
+		Name = "Income",
+		Text = "+$0/s",
+		TextSize = 21,
+		TextColor3 = Theme.Gold,
+		TextWrapped = false,
+		Size = UDim2.new(1, -60, 0, 26),
+		Stroke = 2,
+		LayoutOrder = 2,
+		Parent = money,
+	})
+	UIKit.Padding(incomeLabel, 0, 0, 0, 60)
+	-- Bonus actifs (amis, boost x2) : une petite ligne, seulement quand il y en a
+	local bonusLabel = UIKit.Text({
+		Name = "Bonus",
+		Text = "",
+		TextSize = 15,
+		TextWrapped = false,
+		Size = UDim2.new(1, -61, 0, 20),
+		Stroke = 1.5,
+		Visible = false,
+		LayoutOrder = 3,
+		Parent = money,
+	})
+	UIKit.Padding(bonusLabel, 0, 0, 0, 61)
+	local moneyScale = UIKit.New("UIScale", { Parent = moneyLabel })
+	refs.Money = money
+
+	-------------------------------------------------- Colonne de gauche + tiroir « Plus »
+	local column = UIKit.New("Frame", {
 		Name = "Menu",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 8, 0.5, 24),
-		Size = UDim2.fromOffset(MENU_SIZE.X, MENU_SIZE.Y),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		Size = UDim2.fromOffset(TILE, COLUMN_HEIGHT),
 		ZIndex = 5,
 		Parent = root,
 	})
@@ -319,17 +517,12 @@ function HUD.Create(root: Frame, ctx)
 		Name = "Grid",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
-		Parent = menu,
+		Parent = column,
 	})
-	UIKit.New("UIGridLayout", {
-		CellSize = UDim2.fromOffset(TILE, TILE),
-		CellPadding = UDim2.fromOffset(GAP_X, GAP_Y),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = grid,
-	})
-	refs.Menu = menu
+	UIKit.List(grid, Enum.FillDirection.Vertical, GAP_Y)
+	refs.Column = column
 
-	-- Clic hors du tiroir : il se referme (sous le menu, pour que les tuiles restent cliquables)
+	-- Clic hors du tiroir : il se referme (sous la colonne, pour que les tuiles restent cliquables)
 	local catcher = UIKit.New("TextButton", {
 		Name = "DrawerCatcher",
 		Text = "",
@@ -348,7 +541,7 @@ function HUD.Create(root: Frame, ctx)
 	refs.Catcher = catcher
 
 	local badges: { [string]: Frame } = {}
-	for order, item in MENU do
+	for order, item in COLUMN do
 		local button = UIKit.IconButton({
 			Name = item.Id,
 			Icon = item.Icon,
@@ -375,18 +568,16 @@ function HUD.Create(root: Frame, ctx)
 		end
 	end
 
+	-- Tiroir : il « sort » de Plus, ses deux rangées alignées sur Rebirth et Plus
 	local drawer = UIKit.New("Frame", {
 		Name = "Drawer",
-		-- Ancré en bas à gauche (il « sort » de Plus) ; ses deux rangées de tuiles sont
-		-- alignées sur les deux rangées du bas de la grille
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(1, 16, 0, TILE + GAP_Y - DRAWER_PADDING + DRAWER_SIZE.Y),
+		Position = UDim2.new(1, 16, 1, -(2 * TILE + GAP_Y + DRAWER_PADDING)),
 		Size = UDim2.fromOffset(DRAWER_SIZE.X, DRAWER_SIZE.Y),
 		BackgroundColor3 = Theme.Hud,
 		BackgroundTransparency = 0.22,
 		Visible = false,
 		ZIndex = 6,
-		Parent = menu,
+		Parent = column,
 	})
 	UIKit.Corner(drawer, 20)
 	UIKit.Stroke(drawer, 2, Color3.new(1, 1, 1), 0.82)
@@ -665,6 +856,16 @@ function HUD.Create(root: Frame, ctx)
 		bonusLabel.Visible = #bonuses > 0
 		bonusLabel.Text = table.concat(bonuses, "    ")
 
+		-- Téléportations : impossibles en portant une créature volée, puis recharge
+		local carrying = profile ~= nil and profile.Carrying ~= nil
+		local cooldownLeft = math.max(0, teleportReadyAt - os.clock())
+		for index, button in teleportButtons do
+			button:SetEnabled(not carrying)
+			local fill = cooldownFills[index]
+			fill.Visible = cooldownLeft > 0 and not carrying
+			fill.Size = UDim2.fromScale(cooldownLeft / GameConfig.Movement.TeleportCooldown, 1)
+		end
+
 		-- Pastilles rouges et bulle « Cadeau prêt ! »
 		if profile then
 			local today = Economy.GetUtcDay(State.GetServerUnixTime())
@@ -773,23 +974,51 @@ end
 
 --[[
 	Disposition selon l'écran (appelée par l'UIController) :
-	  Compact    : écran peu haut (téléphone en paysage) -> la grille suit l'argent
-	               au lieu d'être centrée verticalement
-	  LeftOffset : décalage vertical de l'argent (barre Roblox du haut)
+	  Compact    : écran peu haut (téléphone en paysage) -> boutons du haut plus hauts
+	  Touch      : écran tactile -> l'argent passe en haut à gauche, à côté du Sac : le
+	               bas gauche est la zone du joystick de Roblox (idem sur un écran peu
+	               haut : la colonne de gauche y descend jusqu'en bas)
+	  LeftOffset : haut de la colonne de gauche (sous la barre Roblox du haut)
+	Renvoie le bas de la pile du haut (bannière d'annonce, tutoriel dessous).
 ]]
-function HUD.ApplyLayout(info: { Compact: boolean, LeftOffset: number })
-	local money, menu = refs.Money, refs.Menu
-	if not money or not menu then
-		return
+function HUD.ApplyLayout(info: { Compact: boolean, Touch: boolean, LeftOffset: number }): number
+	local top, event, anchor, bag = refs.Top, refs.Event, refs.TopAnchor, refs.Bag
+	local money, moneyList, column = refs.Money, refs.MoneyList, refs.Column
+	if not top or not event or not anchor or not bag or not money or not moneyList or not column then
+		return topStackBottom
 	end
-	money.Position = UDim2.fromOffset(8, info.LeftOffset)
-	if info.Compact then
-		menu.AnchorPoint = Vector2.zero
-		menu.Position = UDim2.fromOffset(8, info.LeftOffset + 116)
+	local size = if info.Compact then TOP_SIZE_COMPACT else TOP_SIZE
+	top.Size = UDim2.fromOffset(3 * size.X + 2 * TOP_GAP, size.Y)
+	for _, button in refs.TopButtons do
+		button.Size = UDim2.fromOffset(size.X, size.Y)
+	end
+	event.Position = UDim2.new(0.5, 0, 0, TOP_TOP + size.Y + 8)
+	topStackBottom = TOP_TOP + size.Y + 8 + EVENT_HEIGHT
+	anchor.Position = UDim2.new(0.5, 0, 0, topStackBottom + 12)
+
+	bag.Position = UDim2.fromOffset(8, info.LeftOffset)
+	if info.Touch or info.Compact then
+		-- À droite du Sac, au-dessus de la zone du joystick
+		money.AnchorPoint = Vector2.zero
+		money.Position = UDim2.fromOffset(TILE + 22, info.LeftOffset - 6)
+		-- Assez étroit pour ne jamais toucher le bouton Rift (le montant rétrécit)
+		money.Size = UDim2.fromOffset(260, 104)
+		moneyList.VerticalAlignment = Enum.VerticalAlignment.Top
 	else
-		menu.AnchorPoint = Vector2.new(0, 0.5)
-		menu.Position = UDim2.new(0, 8, 0.5, 24)
+		money.AnchorPoint = Vector2.new(0, 1)
+		money.Position = UDim2.new(0, 8, 1, -8)
+		money.Size = UDim2.fromOffset(400, 104)
+		moneyList.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	end
+	-- Colonne : sous le Sac sur téléphone, centrée verticalement ailleurs
+	if info.Compact then
+		column.AnchorPoint = Vector2.zero
+		column.Position = UDim2.fromOffset(8, info.LeftOffset + TILE + GAP_Y + 14)
+	else
+		column.AnchorPoint = Vector2.new(0, 0.5)
+		column.Position = UDim2.new(0, 8, 0.5, 10)
+	end
+	return topStackBottom
 end
 
 return HUD

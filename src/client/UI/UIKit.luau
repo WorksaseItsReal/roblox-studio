@@ -283,7 +283,8 @@ end
 	opts : Text, Color (clé de Theme.Palette ou {haut, bas, rebord}), Size, Position,
 	       AnchorPoint, LayoutOrder, TextSize, OnClick, Parent, ZIndex, Name, Visible,
 	       Radius (arrondi : nombre ou UDim, 12 par défaut), Depth (rebord, 4),
-	       StrokeThickness (2,5), Fit (false = pas de rétrécissement automatique du texte)
+	       StrokeThickness (2,5), Fit (false = pas de rétrécissement automatique du texte),
+	       OnBlocked (appelé sur un clic quand le bouton est indisponible : expliquer pourquoi)
 	Structure : Instance (cadre) > Lip (rebord foncé + contour encre) + Face (dégradé) > Label
 	Gris (Theme.Palette.Gray) = indisponible pour l'instant (redeviendra cliquable) ;
 	SetStatus(texte) = simple statut plat, non cliquable (« ✅ Reçu », « 🔒 2:20 »...) :
@@ -413,6 +414,9 @@ function UIKit.Button(opts: Props): Button
 	face.Activated:Connect(function()
 		face.Position = UDim2.new()
 		if not button.Enabled then
+			if opts.OnBlocked then
+				opts.OnBlocked()
+			end
 			return
 		end
 		scale.Scale = 0.95
