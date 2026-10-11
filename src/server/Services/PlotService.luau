@@ -194,7 +194,10 @@ function PlotService.RenderAll(player: Player)
 	PlotService.RefreshSlotPads(player)
 end
 
--- Montre les emplacements débloqués, cache les autres
+-- Montre les emplacements débloqués, cache les autres. Un emplacement occupé reste
+-- toujours visible, même au-delà du maximum (pass « Emplacements VIP » retiré,
+-- emplacement réattribué par la réparation des données) : sinon la créature
+-- flotterait au-dessus d'un socle invisible
 function PlotService.RefreshSlotPads(player: Player)
 	local plot = plotByPlayer[player]
 	local data = Services.DataService.GetData(player)
@@ -202,9 +205,15 @@ function PlotService.RefreshSlotPads(player: Player)
 		return
 	end
 	local maxSlots = Economy.GetMaxSlots(data, Services.MonetizationService.GetPasses(player))
+	local occupied: { [number]: boolean } = {}
+	for _, entry in data.Creatures do
+		if type(entry.Slot) == "number" then
+			occupied[entry.Slot] = true
+		end
+	end
 	local color = getPlotColor(plot)
 	for index, slot in plot.Slots do
-		setSlotLook(slot, index <= maxSlots, color)
+		setSlotLook(slot, index <= maxSlots or occupied[index] == true, color)
 	end
 end
 

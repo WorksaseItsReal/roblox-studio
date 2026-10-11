@@ -52,8 +52,11 @@ MapBuilder.PLOT_X = 66 -- distance entre l'axe du tapis et le centre des bases
 MapBuilder.PLOT_ROWS_Z = { -105, -35, 35, 105 }
 MapBuilder.PLOT_WIDTH = 60 -- le long du tapis
 MapBuilder.PLOT_DEPTH = 84 -- de l'entrée au mur du fond
--- Murs bas (on voit l'intérieur par-dessus) mais pas franchissables d'un saut :
--- corps de 7 + chaperon de 1 = 8,6 studs au-dessus de l'herbe (saut ≈ 7,2)
+-- Murs bas (on voit l'intérieur par-dessus) : corps de 7 + chaperon de 1 = 8,6 studs
+-- au-dessus de l'herbe. Ils ne sont PAS infranchissables (un saut depuis le seuil de
+-- l'entrée, ou une pyramide de joueurs, peut passer) : c'est le serveur qui fait
+-- respecter la barrière (BaseDefenseService expulse les intrus, StealService refuse
+-- les vols tant qu'elle est active)
 MapBuilder.WALL_HEIGHT = 7
 MapBuilder.ISLAND_RADIUS = 300
 

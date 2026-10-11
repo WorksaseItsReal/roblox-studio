@@ -44,8 +44,9 @@ entrée face au tapis. Peu d'éléments, de vrais matériaux Roblox, néon rare.
   néon dans la map, contre ~560 en v2). Tout le reste est en matériau mat.
 - **Bases homogènes** : la couleur d'équipe n'apparaît que sur le chaperon des murs et des
   piliers, le linteau de l'arche et le panneau « Base de {nom} » (Fredoka One blanc,
-  contour encre bleu nuit). Murs bas (7 studs + chaperon : on voit l'intérieur par-dessus,
-  on ne les franchit pas d'un saut), piliers d'angle et de milieu.
+  contour encre bleu nuit). Murs bas (7 studs + chaperon : on voit l'intérieur par-dessus ;
+  ils restent franchissables en grimpant, c'est le serveur qui fait respecter la
+  barrière), piliers d'angle et de milieu.
 - La Rift est l'emblème du jeu : anneau de rayon 22, centre (0, 22.5, -195), le bas de
   l'anneau au ras du tapis (les créatures sortent du vortex), encadré de deux pylônes de
   pierre taillée. C'est plus grand que le centre « vers Y = 17 » de
@@ -149,9 +150,10 @@ Workspace
    trouver sur cette voie.
 4. **Les bases** : construis une base complète (`Plot1`), vérifie-la en jeu, puis duplique-la
    (8 bases = 8 joueurs max). L'entrée (face -Z du `Floor`) doit faire face au chemin.
-   Ferme les 3 autres côtés et le reste de la façade par des murs d'au moins 8 studs
-   au-dessus du sol extérieur (sinon on les franchit d'un saut et on contourne la
-   barrière). La `Barrier` bouche l'ouverture de l'entrée ; dessine le verrou avec des
+   Ferme les 3 autres côtés et le reste de la façade par des murs d'environ 8 studs
+   au-dessus du sol extérieur. Des murs plus hauts gênent les intrus, mais la vraie
+   protection est côté serveur : tant que la barrière est active, tout joueur qui entre
+   quand même est renvoyé dehors et aucun vol n'est accepté. La `Barrier` bouche l'ouverture de l'entrée ; dessine le verrou avec des
    pièces dans `Lasers` (sinon la `Barrier` elle-même devient visible).
 5. **Emplacements** : 28 pièces `Slot1`..`Slot28` (tu peux en mettre plus, jamais moins que
    `GameConfig.Slots.MaxPhysical`). L'ordre compte : les premiers sont débloqués d'abord.
