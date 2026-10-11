@@ -7,25 +7,27 @@
 	Créée par le serveur : visible par tous les joueurs.
 
 	Même langage visuel que les étiquettes des créatures (docs/ART_DIRECTION.md) :
-	contours noirs épais, titre en Luckiest Guy dans une pastille au dégradé vif,
-	pseudo en Fredoka One blanc, statistiques en jaune-or.
+	tout en Fredoka One en casse normale, contours encre bleu nuit (jamais noirs),
+	titre dans une pastille de la couleur du titre (léger dégradé, contour encre),
+	pseudo blanc, statistiques en or « Récompense ».
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Economy = require(ReplicatedStorage.Shared.Modules.Economy)
-local Format = require(ReplicatedStorage.Shared.Modules.Format)
 
 local NameTagService = {}
 
 local Services
 
-local INK = Color3.fromRGB(0, 0, 0)
+local INK = Color3.fromRGB(28, 31, 58) -- encre bleu nuit (contours)
 local WHITE = Color3.fromRGB(255, 255, 255)
-local GOLD = Color3.fromRGB(255, 215, 40)
+local GOLD = Color3.fromRGB(255, 201, 60) -- jeton « Récompense »
+local FONT = Enum.Font.FredokaOne
+local PILL_HEIGHT = 26
 
-local function stroke(parent: Instance, thickness: number, mode: Enum.ApplyStrokeMode?)
+local function stroke(parent: Instance, thickness: number, mode: Enum.ApplyStrokeMode?): UIStroke
 	local s = Instance.new("UIStroke")
 	s.Color = INK
 	s.Thickness = thickness
@@ -37,26 +39,31 @@ local function stroke(parent: Instance, thickness: number, mode: Enum.ApplyStrok
 	return s
 end
 
-local function label(parent: Instance, name: string, order: number, size: number, font: Enum.Font, color: Color3)
+local function label(parent: Instance, name: string, order: number, size: number, color: Color3, outline: number)
 	local text = Instance.new("TextLabel")
 	text.Name = name
 	text.LayoutOrder = order
 	text.BackgroundTransparency = 1
 	text.Size = UDim2.new(1, 0, 0, size + 4)
-	text.Font = font
+	text.Font = FONT
 	text.TextSize = size
 	text.TextColor3 = color
 	text.Text = ""
 	text.Parent = parent
-	stroke(text, 2.5)
+	stroke(text, outline)
 	return text
+end
+
+-- Luminance perçue (0..1) : texte bleu nuit sur les pastilles claires, blanc sinon
+local function luminance(color: Color3): number
+	return 0.299 * color.R + 0.587 * color.G + 0.114 * color.B
 end
 
 local function build(head: BasePart): BillboardGui
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "NameTag"
 	gui.Adornee = head
-	gui.Size = UDim2.fromOffset(280, 90)
+	gui.Size = UDim2.fromOffset(280, 84)
 	-- Le bas de l'étiquette est posé 1,6 stud au-dessus de la tête (SizeOffset Y positif =
 	-- vers le haut, en fraction de la taille) : taille fixe en pixels, elle ne descend
 	-- jamais sur l'avatar quand il s'éloigne
@@ -73,59 +80,48 @@ local function build(head: BasePart): BillboardGui
 	layout.Padding = UDim.new(0, 2)
 	layout.Parent = gui
 
-	-- Pastille de titre : dégradé vif, reflet en haut, contour noir épais
+	-- Pastille de titre : couleur du titre en léger dégradé (haut un peu plus clair),
+	-- coins ronds, contour encre ; largeur automatique selon le titre
 	local holder = Instance.new("Frame")
 	holder.Name = "TitleHolder"
 	holder.LayoutOrder = 1
 	holder.BackgroundTransparency = 1
-	holder.Size = UDim2.new(1, 0, 0, 28)
+	holder.Size = UDim2.new(1, 0, 0, PILL_HEIGHT + 4)
 	holder.Parent = gui
 	local pill = Instance.new("Frame")
 	pill.Name = "Pill"
-	pill.AnchorPoint = Vector2.new(0.5, 0)
-	pill.Position = UDim2.fromScale(0.5, 0)
-	pill.Size = UDim2.fromOffset(0, 28)
+	pill.AnchorPoint = Vector2.new(0.5, 0.5)
+	pill.Position = UDim2.fromScale(0.5, 0.5)
+	pill.Size = UDim2.fromOffset(0, PILL_HEIGHT)
 	pill.AutomaticSize = Enum.AutomaticSize.X
 	pill.BackgroundColor3 = WHITE
 	pill.Parent = holder
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0.5, 0)
 	corner.Parent = pill
-	stroke(pill, 3, Enum.ApplyStrokeMode.Border)
+	stroke(pill, 2.5, Enum.ApplyStrokeMode.Border)
 	local gradient = Instance.new("UIGradient")
 	gradient.Name = "Gradient"
 	gradient.Rotation = 90
 	gradient.Parent = pill
 	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0, 14)
-	padding.PaddingRight = UDim.new(0, 14)
+	padding.PaddingLeft = UDim.new(0, 12)
+	padding.PaddingRight = UDim.new(0, 12)
 	padding.Parent = pill
-	local shine = Instance.new("Frame")
-	shine.Name = "Shine"
-	shine.AnchorPoint = Vector2.new(0.5, 0)
-	shine.Position = UDim2.new(0.5, 0, 0, 3)
-	shine.Size = UDim2.new(1, 6, 0.36, 0)
-	shine.BackgroundColor3 = WHITE
-	shine.BackgroundTransparency = 0.6
-	shine.BorderSizePixel = 0
-	shine.Parent = pill
-	local shineCorner = Instance.new("UICorner")
-	shineCorner.CornerRadius = UDim.new(0.5, 0)
-	shineCorner.Parent = shine
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.BackgroundTransparency = 1
 	title.Size = UDim2.fromScale(0, 1)
 	title.AutomaticSize = Enum.AutomaticSize.X
-	title.Font = Enum.Font.LuckiestGuy
-	title.TextSize = 17
+	title.Font = FONT
+	title.TextSize = 16
 	title.TextColor3 = WHITE
 	title.ZIndex = 2
 	title.Parent = pill
-	stroke(title, 2)
+	stroke(title, 1.5).Name = "TitleStroke"
 
-	label(gui, "PlayerName", 2, 24, Enum.Font.FredokaOne, WHITE)
-	label(gui, "Stats", 3, 16, Enum.Font.FredokaOne, GOLD)
+	label(gui, "PlayerName", 2, 24, WHITE, 2)
+	label(gui, "Stats", 3, 15, GOLD, 1.5)
 	gui.Parent = head
 	return gui
 end
@@ -149,15 +145,21 @@ function NameTagService.Refresh(player: Player)
 	local titleInfo = Economy.GetTitle(data.Rebirths)
 	local pill = nameTag:FindFirstChild("TitleHolder"):FindFirstChild("Pill")
 	local gradient = pill:FindFirstChild("Gradient") :: UIGradient
-	-- Dégradé vif : clair en haut, couleur saturée au milieu, plus sombre en bas
-	local hue, saturation, value = titleInfo.Color:ToHSV()
-	local vivid = Color3.fromHSV(hue, math.min(1, saturation * 1.25), value)
+	-- Léger dégradé : haut un peu plus clair, bas un peu plus soutenu (couleur maîtrisée)
+	local color = titleInfo.Color
 	gradient.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, vivid:Lerp(WHITE, 0.35)),
-		ColorSequenceKeypoint.new(0.5, vivid),
-		ColorSequenceKeypoint.new(1, vivid:Lerp(INK, 0.22)),
-	});
-	(pill:FindFirstChild("Title") :: TextLabel).Text = Format.Upper(titleInfo.Name);
+		ColorSequenceKeypoint.new(0, color:Lerp(WHITE, 0.2)),
+		ColorSequenceKeypoint.new(0.55, color),
+		ColorSequenceKeypoint.new(1, color:Lerp(INK, 0.1)),
+	})
+	-- Pastille claire (Novice, Maître des dimensions...) : texte bleu nuit sans contour ;
+	-- pastille soutenue : texte blanc à contour encre
+	local light = luminance(color) > 0.66
+	local title = pill:FindFirstChild("Title") :: TextLabel
+	title.Text = titleInfo.Name
+	title.TextColor3 = if light then INK else WHITE
+	local titleStroke = title:FindFirstChild("TitleStroke") :: UIStroke
+	titleStroke.Enabled = not light;
 	(nameTag:FindFirstChild("PlayerName") :: TextLabel).Text = player.DisplayName;
 	(nameTag:FindFirstChild("Stats") :: TextLabel).Text =
 		string.format("🦹 %d vols  •  🔁 %d", data.Stats.Steals, data.Rebirths)

@@ -5,8 +5,9 @@
 	(coût négligeable même avec 8 bases pleines) :
 	- créatures des bases : petit sautillement + balancement (ou flottement doux pour
 	  celles qui planent, attribut "Floating")
-	- pièces "Orbit" (perles d'aura Secret, éclats de mutation) : tournent autour
-	- pièces avec l'attribut "Rainbow" (Secret, mutation Prismatique) : teinte animée
+	- pièces "Orbit" (étincelles des Secrètes, cristaux du Zéro Absolu) : tournent autour
+	- pièces avec l'attribut "Rainbow" (Secret, mutation Prismatique) : teinte qui tourne
+	  lentement (un cycle en ~12 s : vivant, jamais criard ni clignotant)
 	- clignement des yeux (pièces "Eye" / "Pupil" écrasées, reflets "Shine" masqués :
 	  ce sont des boules, Roblox les garde rondes)
 	- étiquettes des bases (BillboardGui "Info") : de loin, seules la rareté et le revenu
@@ -32,10 +33,13 @@ local ANIMATION_RADIUS = 85 -- au-delà : rien n'est animé
 local HALF_RATE_RADIUS = 35 -- au-delà : une image sur deux
 local DETAIL_RADIUS = 55 -- clignements et couleurs animées
 local BEHIND_CAMERA = -10 -- studs derrière le plan de la caméra : pas d'animation
-local LABEL_NEAR = 38 -- étiquette complète en deçà...
-local LABEL_FAR = 42 -- ...rareté + revenu seulement au-delà (entre les deux : inchangée)
+-- Étiquette complète en deçà de LABEL_NEAR, rareté + revenu seulement au-delà de LABEL_FAR
+-- (entre les deux : inchangée). Assez court pour que, dans une base pleine, les noms des
+-- rangées du fond ne se chevauchent pas : de loin on lit d'abord la rareté et le revenu
+local LABEL_NEAR = 30
+local LABEL_FAR = 34
 local ORBIT_SPEED = 0.9 -- radians par seconde
-local RAINBOW_SPEED = 0.18 -- tours de roue chromatique par seconde
+local RAINBOW_SPEED = 0.08 -- tours de roue chromatique par seconde
 local BLINK_DURATION = 0.13
 
 local SQUASH_PARTS = { Eye = true, Pupil = true }

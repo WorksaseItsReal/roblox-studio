@@ -1,9 +1,15 @@
 --[[
 	CreatureVisuals
 	===============
-	Fabrique de modèles de créatures, style « jouet » des jeux Steal a ... :
-	couleurs franches, grosses têtes rondes, gros yeux brillants, joues roses,
-	silhouettes lisibles de loin.
+	Fabrique de modèles de créatures, direction artistique v3 « propre »
+	(docs/ART_DIRECTION.md, section 4) : formes rondes et lisibles, couleurs franches mais
+	maîtrisées, UNE seule couleur d'accent par créature (en plastique, pas en néon), les
+	mêmes yeux pour toutes les créatures organiques, peu de pièces.
+
+	Le néon est réservé à ce qui doit briller : l'anneau de rareté, la visière et l'objectif
+	des robots Cyber, les cœurs d'énergie (titan, noyau), les fissures du golem de scories,
+	les étincelles Secrètes et quelques effets de mutation (auréole Céleste, lueurs
+	Abyssales). Rien ne clignote en permanence.
 
 	1. Si un modèle nommé def.Model (ou def.Id) existe dans
 	   ReplicatedStorage.Assets.Creatures, il est cloné (vos vrais modèles 3D).
@@ -12,12 +18,12 @@
 	   - archétypes : Blob, Spiky, Tall, Crystal, Wisp, Beast, Serpent, Golem
 	   - traits propres à chaque créature (TRAITS : oreilles, cornes, ailes, bec,
 	     trompe, tentacules, hélices...) : les 40 créatures ont leur silhouette
-	   - accessoire de dimension : Lave (flamme), Néant (antennes + 3e œil),
-	     Glace (neige + cristaux), Bonbon (chantilly + cerise), Cyber (antenne)
-	   - rareté : taille, disque néon au sol (dès Rare), couronne et étincelles
-	     dès Légendaire, lumière dès Mythique, aura arc-en-ciel pour Secret
+	   - accessoire de dimension : Lave (flamme), Néant (antennes), Glace (bonnet de neige
+	     et cristal), Bonbon (chantilly et cerise), Cyber (antenne)
+	   - rareté : taille, anneau néon fin au sol (dès Rare), couronne dorée dès Légendaire
+	     (gemme dès Mythique), arc-en-ciel pour Secret (anneau, gemme, étincelles en orbite)
 	   - mutation : couleurs de la mutation + effet propre (voir Mutations.luau)
-	   - étiquette (CreateBillboard) : texte seul façon « Steal a ... »
+	   - étiquette (CreateBillboard) : texte seul, contours encre bleu nuit
 	   - chaque créature tient dans la case de son socle de base (10 x 8,8 studs) :
 	     trop grande, elle est reconstruite un peu plus petite (fitFactor)
 
@@ -62,27 +68,37 @@ export type BuildOptions = {
 local rgb = Color3.fromRGB
 local SMOOTH = Enum.Material.SmoothPlastic
 local NEON = Enum.Material.Neon
-local GLASS = Enum.Material.Glass
 
 local WHITE = rgb(255, 255, 255)
-local INK = rgb(0, 0, 0)
-local MOUTH = rgb(96, 18, 42)
-local TONGUE = rgb(255, 104, 136)
-local BLUSH = rgb(255, 86, 146)
-local INNER_EAR = rgb(255, 138, 186)
-local BEAK = rgb(255, 168, 24)
-local HORN = rgb(255, 240, 210)
-local GOLD = rgb(255, 198, 26)
-local GOLD_LIGHT = rgb(255, 232, 110)
-local STEEL = rgb(64, 70, 88)
+-- Encre bleu nuit de la direction artistique : contours des étiquettes, pupilles,
+-- sourcils (jamais de noir pur)
+local INK = rgb(28, 31, 58)
+local MOUTH = rgb(92, 24, 46)
+local TONGUE = rgb(255, 112, 140)
+local BLUSH = rgb(255, 112, 150)
+local INNER_EAR = rgb(255, 150, 186)
+local BEAK = rgb(255, 172, 36)
+local HORN = rgb(255, 240, 214)
+local GOLD = rgb(255, 200, 52)
+local GOLD_DARK = rgb(240, 158, 30)
+local STEEL = rgb(72, 80, 102)
+local SCREEN = rgb(24, 27, 46) -- visière et écrans des robots
+-- Dessus d'un socle débloqué (PlotService) : l'intérieur de l'anneau de rareté s'y fond
+local PEDESTAL_TOP = rgb(250, 250, 255)
+-- Flamme de dessin animé (accessoire Lave, queue du Braisillon) : orange à la base, pointe
+-- jaune, cœur jaune pâle lumineux (seul néon de la flamme : c'est du feu)
+local FLAME = rgb(255, 150, 36)
+local FLAME_TIP = rgb(255, 206, 48)
+local FLAME_CORE = rgb(255, 232, 128)
 
 -- Emplacement d'une base (studs) : colonnes espacées de 11, rangées de 9, socle de 6,4 de
 -- diamètre. Chaque créature tient dans une case de 10 x 8,8 centrée sur son socle (les
--- voisines ne se touchent jamais) ; disque de rareté et orbites restent dans la case.
+-- voisines ne se touchent jamais) ; anneau de rareté et orbites restent dans la case.
 local SLOT_HALF_WIDTH = 5.0
 local SLOT_HALF_DEPTH = 4.4
-local SLOT_RADIUS = 3.1 -- rayon max du disque de rareté (le socle fait 3,2)
-local ORBIT_REACH = 4.3 -- distance max au centre des pièces en orbite (perles, éclats)
+local SLOT_RADIUS = 3.1 -- rayon max de l'anneau de rareté (le socle fait 3,2)
+local RING_WIDTH = 0.42 -- largeur de l'anneau de rareté (studs, quelle que soit la taille)
+local ORBIT_REACH = 4.3 -- distance max au centre des pièces en orbite (étincelles, éclats)
 local MIN_FIT = 0.78 -- réduction maximale pour faire tenir une créature dans sa case
 
 -- Dégradé régulier à partir d'une liste de couleurs (configs : données pures)
@@ -95,78 +111,64 @@ local function sequence(colors: { Color3 }): ColorSequence
 end
 
 ---------------------------------------------------------------------------
--- Styles par dimension (palette « jouet » saturée, voir docs/ART_DIRECTION.md)
+-- Styles par dimension (une couleur de corps, un ventre clair, des membres plus
+-- soutenus et UNE couleur d'accent ; voir docs/ART_DIRECTION.md)
 ---------------------------------------------------------------------------
 type Style = {
 	Body: Color3,
 	Belly: Color3,
 	Limb: Color3,
-	Accent: Color3,
-	Accent2: Color3,
-	Pupil: Color3,
-	Glow: boolean, -- accents en néon (sinon plastique brillant)
-	Robot: boolean?, -- semelles et voyant néon (Cyber)
+	Accent: Color3, -- seule couleur d'accent (plastique plein)
+	Robot: boolean?, -- yeux d'écran (Cyber)
 	Topper: string, -- accessoire de tête par défaut
 	Blush: boolean,
 	Eyes: string?, -- style d'yeux par défaut
-	ThirdEye: { [string]: boolean }?, -- archétypes qui reçoivent un 3e œil
 }
 
 local STYLES: { [string]: Style } = {
 	Lava = {
-		Body = rgb(255, 104, 26),
-		Belly = rgb(255, 214, 70),
-		Limb = rgb(228, 42, 30),
-		Accent = rgb(255, 222, 40),
-		Accent2 = rgb(255, 128, 0),
-		Pupil = rgb(48, 14, 8),
-		Glow = true,
+		-- Rouge corail, ventre crème, accent jaune flamme (le jaune tranche sur le corail)
+		Body = rgb(252, 106, 74),
+		Belly = rgb(255, 228, 172),
+		Limb = rgb(214, 62, 56),
+		Accent = rgb(255, 208, 62),
 		Topper = "Flame",
 		Blush = true,
 	},
 	Void = {
-		Body = rgb(124, 48, 238),
-		Belly = rgb(214, 102, 255),
-		Limb = rgb(74, 24, 170),
-		Accent = rgb(255, 58, 214),
-		Accent2 = rgb(64, 222, 255),
-		Pupil = rgb(30, 8, 58),
-		Glow = true,
+		-- Violet franc (plus clair que l'Épique), ventre lilas, accent rose
+		Body = rgb(146, 112, 255),
+		Belly = rgb(218, 204, 255),
+		Limb = rgb(104, 72, 218),
+		Accent = rgb(255, 120, 200),
 		Topper = "Antennae",
 		Blush = true,
-		ThirdEye = { Blob = true, Tall = true, Beast = true },
 	},
 	Ice = {
-		Body = rgb(44, 174, 255),
-		Belly = rgb(236, 250, 255),
-		Limb = rgb(24, 106, 228),
-		Accent = rgb(150, 248, 255),
-		Accent2 = rgb(255, 255, 255),
-		Pupil = rgb(12, 30, 78),
-		Glow = false,
+		-- Bleu glacier, ventre neige, accent cyan pâle (cristaux)
+		Body = rgb(104, 196, 255),
+		Belly = rgb(242, 251, 255),
+		Limb = rgb(58, 142, 236),
+		Accent = rgb(176, 242, 255),
 		Topper = "Snow",
 		Blush = true,
 	},
 	Candy = {
-		Body = rgb(255, 94, 186),
-		Belly = rgb(255, 244, 250),
-		Limb = rgb(236, 42, 140),
-		Accent = rgb(56, 230, 196),
-		Accent2 = rgb(255, 214, 46),
-		Pupil = rgb(66, 12, 46),
-		Glow = false,
+		-- Rose bonbon, ventre crème, accent menthe
+		Body = rgb(255, 140, 198),
+		Belly = rgb(255, 242, 248),
+		Limb = rgb(240, 94, 162),
+		Accent = rgb(92, 222, 192),
 		Topper = "Cream",
 		Blush = true,
 	},
 	Cyber = {
-		-- Gris métal soutenu : un gris clair disparaîtrait sur les socles blancs
-		Body = rgb(146, 158, 184),
-		Belly = rgb(38, 44, 60),
-		Limb = rgb(50, 56, 76),
-		Accent = rgb(40, 255, 110),
-		Accent2 = rgb(0, 214, 255),
-		Pupil = rgb(10, 12, 18),
-		Glow = true,
+		-- Acier bleuté (un gris clair disparaîtrait sur les socles blancs), écrans sombres,
+		-- accent vert : seuls les yeux d'écran sont en néon
+		Body = rgb(170, 184, 214),
+		Belly = rgb(46, 52, 76),
+		Limb = rgb(88, 98, 130),
+		Accent = rgb(60, 238, 132),
 		Topper = "Antenna",
 		Blush = false,
 		Eyes = "Visor",
@@ -183,89 +185,107 @@ local TRAITS: { [string]: Traits } = {
 	-- Lave
 	Lava_Braisillon = { Topper = "BigFlame", Tail = "Flame" },
 	Lava_CrapaudMagma = { Eyes = "Frog", Spots = true, Mouth = "Wide" },
-	Lava_Salamandre = { Frills = true, Spots = true },
+	Lava_Salamandre = { Frills = true },
 	Lava_GolemScories = {
 		-- Roche de lave charbon + fissures néon orange : fort contraste, lisible de loin
 		Palette = {
-			Body = rgb(62, 42, 48),
-			Belly = rgb(44, 30, 34),
-			Limb = rgb(52, 36, 40),
-			Accent = rgb(255, 120, 20),
+			Body = rgb(70, 50, 58),
+			Belly = rgb(52, 38, 44),
+			Limb = rgb(58, 42, 48),
+			Accent = rgb(255, 128, 28),
 		},
 		Cracks = true,
 		Brows = "Angry",
 	},
 	Lava_PhenixFele = { Wings = "Bird", Beak = true, Topper = "Crest", Tail = "Feathers", Mouth = "None" },
-	Lava_WyrmVolcanique = { Horns = "Dragon", Spines = true, Wings = "Bat" },
-	Lava_TitanNoyau = { Core = true, Horns = "Dragon", Cracks = true, Brows = "Angry" },
-	Lava_IgnisPrimordial = { Palette = { Body = rgb(255, 138, 20), Accent2 = rgb(255, 70, 20) } },
+	Lava_WyrmVolcanique = { Horns = "Dragon", Spines = true },
+	-- Plaque de poitrine en roche sombre : le cœur de magma ressort
+	Lava_TitanNoyau = { Palette = { Belly = rgb(78, 52, 58) }, Core = true, Horns = "Dragon", Brows = "Angry" },
+	Lava_IgnisPrimordial = { Palette = { Body = rgb(255, 134, 36) } },
 	-- Néant
 	Void_Ombrelin = { Horns = "Imp", Tail = "Devil", Topper = "None" },
 	Void_OeilErrant = { Eyes = "Cyclops", Wings = "Bat", Mouth = "None" },
-	Void_SpectreCreux = { Ghost = true, Mouth = "O", Topper = "None" },
+	-- Fantôme pâle (lilas presque blanc) : il se distingue des autres créatures du Néant
+	Void_SpectreCreux = {
+		Palette = { Body = rgb(206, 192, 255), Belly = rgb(244, 240, 255), Limb = rgb(158, 136, 244) },
+		Ghost = true,
+		Mouth = "O",
+		Topper = "None",
+	},
 	Void_MeduseVide = { Tentacles = true },
 	Void_DevoreurEchos = { Mouth = "Fangs", Ears = "Bat", Topper = "None" },
-	Void_ArchonteSilencieux = { Hood = true, Cape = rgb(92, 30, 196), GlowEyes = true, Topper = "None" },
-	Void_LeviathanAbyssal = { Fins = true, Horns = "Dragon", Spots = true },
-	Void_CeluiQuiNestPas = { Eyes = "Many", Palette = { Body = rgb(88, 30, 186), Limb = rgb(58, 16, 132) } },
+	Void_ArchonteSilencieux = { Hood = true, Cape = rgb(78, 46, 170), Topper = "None" },
+	Void_LeviathanAbyssal = { Fins = true, Horns = "Dragon" },
+	Void_CeluiQuiNestPas = { Eyes = "Many", Palette = { Body = rgb(98, 60, 200), Limb = rgb(66, 38, 150) } },
 	-- Glace
 	Ice_FloconGrognon = { Snowflake = true, Brows = "Grumpy", Mouth = "Flat", Topper = "None" },
 	Ice_PingouinGivre = {
-		Palette = { Body = rgb(30, 92, 214), Limb = rgb(255, 156, 26) },
+		-- Pingouin bleu roi, bec et pattes orange, écharpe rouge (son accent)
+		Palette = { Body = rgb(40, 102, 220), Limb = rgb(255, 160, 40), Accent = rgb(255, 72, 96) },
 		Beak = true,
 		Flippers = true,
-		Scarf = rgb(255, 54, 84),
+		Scarf = true,
 		Mouth = "None",
+		Topper = "None",
 	},
 	Ice_LynxCristallin = { Ears = "Lynx", Tail = "Short", Shards = true, Topper = "None" },
 	Ice_YetiMiniature = {
-		-- Corps bleu glacier, fourrure blanche par-dessus (un yéti blanc disparaît sur le socle)
-		Palette = { Body = rgb(110, 196, 255), Belly = rgb(240, 250, 255), Limb = rgb(64, 146, 236) },
+		-- Corps bleu glacier, touffes de fourrure blanche (un yéti blanc disparaît sur le socle)
+		Palette = { Body = rgb(120, 200, 255), Belly = rgb(242, 250, 255), Limb = rgb(70, 150, 236) },
 		Fur = true,
-		Horns = "Ram",
 		Topper = "None",
 	},
 	Ice_SentinelleGivre = { Helmet = true, Staff = "Spear", Topper = "None" },
 	Ice_MammouthBoreal = { Trunk = true, Ears = "Elephant", Fur = true },
-	Ice_ReineBlizzard = { Staff = "Wand", Cape = rgb(170, 236, 255) },
-	Ice_ZeroAbsolu = { Palette = { Body = rgb(150, 228, 255), Limb = rgb(60, 176, 255) }, OrbitCrystals = true },
+	Ice_ReineBlizzard = { Staff = "Wand" },
+	Ice_ZeroAbsolu = { Palette = { Body = rgb(150, 222, 255), Limb = rgb(70, 170, 245) }, OrbitCrystals = true },
 	-- Bonbon
 	Candy_Gommy = { Ears = "Bear", Topper = "None" },
 	Candy_Marshmallo = {
 		-- Corps rose, tête blanche (Belly) : le blanc se détache sur le ciel, pas sur le socle
-		Palette = { Body = rgb(255, 138, 198), Belly = rgb(255, 250, 252), Limb = rgb(255, 186, 222) },
+		Palette = { Body = rgb(255, 146, 202), Belly = rgb(255, 250, 252), Limb = rgb(255, 188, 222) },
 		Marshmallow = true,
 	},
 	Candy_LicorneReglisse = {
-		Palette = { Body = rgb(104, 54, 168), Belly = rgb(255, 128, 206), Limb = rgb(72, 36, 120) },
+		-- Réglisse violet foncé, ventre et crinière roses (son accent)
+		Palette = {
+			Body = rgb(106, 60, 168),
+			Belly = rgb(255, 196, 228),
+			Limb = rgb(76, 42, 124),
+			Accent = rgb(255, 116, 196),
+		},
 		Horns = "Unicorn",
 		Mane = true,
 		Topper = "None",
 	},
 	Candy_GolemPraline = {
-		Palette = { Body = rgb(156, 84, 44), Belly = rgb(255, 210, 150), Limb = rgb(116, 60, 30) },
-		Sprinkles = true,
+		Palette = { Body = rgb(164, 92, 52), Belly = rgb(255, 214, 160), Limb = rgb(124, 66, 36) },
 	},
 	Candy_DragonBarbeAPapa = { Clouds = true, Wings = "Fairy", Horns = "Nub", Topper = "None" },
 	Candy_RoiCaramel = {
-		Palette = { Body = rgb(255, 168, 52), Belly = rgb(255, 232, 168), Limb = rgb(218, 116, 26) },
-		Cape = rgb(226, 30, 64),
+		-- Caramel doré, cape rouge (son accent), sceptre d'or
+		Palette = {
+			Body = rgb(255, 170, 60),
+			Belly = rgb(255, 234, 174),
+			Limb = rgb(220, 120, 32),
+			Accent = rgb(232, 44, 76),
+		},
+		Cape = true,
 		Staff = "Scepter",
 	},
 	Candy_HydreSucreOrge = { Heads = true },
-	Candy_SucreneaInfinie = { Sprinkles = true, Wings = "Fairy", Staff = "Lollipop" },
+	Candy_SucreneaInfinie = { Wings = "Fairy", Staff = "Lollipop" },
 	-- Cyber
 	Cyber_BitBot = {},
 	Cyber_DronePixel = { Eyes = "Lens", Propellers = true, Topper = "None" },
-	Cyber_Glitchat = { Ears = "Cat", Tail = "Cat", Glitch = true, Topper = "None" },
+	Cyber_Glitchat = { Ears = "Cat", Tail = "Cat", Topper = "None" },
 	Cyber_SerpentBinaire = { Spines = true },
 	Cyber_MechaLoup = { Ears = "Wolf", Tail = "Wolf", Topper = "None" },
-	Cyber_IARebelle = { Eyes = "Cyclops", Ring = true },
+	Cyber_IARebelle = { Eyes = "Lens", Ring = true },
 	Cyber_KernelOmega = { Core = true },
 	Cyber_SingulariteExe = {
-		Palette = { Body = rgb(70, 76, 112), Limb = rgb(40, 44, 66) },
+		Palette = { Body = rgb(86, 94, 132), Limb = rgb(50, 56, 82) },
 		Ring = true,
-		Glitch = true,
 	},
 }
 
@@ -279,12 +299,8 @@ type Palette = {
 	Belly: Color3,
 	Limb: Color3,
 	Accent: Color3,
-	Accent2: Color3,
 	Pupil: Color3,
-	Sclera: Color3,
-	PupilMaterial: Enum.Material,
 	Material: Enum.Material,
-	AccentMaterial: Enum.Material,
 }
 
 type Ctx = {
@@ -416,12 +432,13 @@ local function halfExtent(part: BasePart, axis: Vector3): number
 end
 
 -- Couleur arc-en-ciel + attribut "Rainbow" (CreatureAnimator fait tourner la teinte)
-local function rainbow(part: BasePart, phase: number)
+local function rainbow(part: BasePart, phase: number, saturation: number?)
 	local hue = phase % 1
-	part.Color = Color3.fromHSV(hue, 0.78, 1)
+	part.Color = Color3.fromHSV(hue, saturation or 0.72, 1)
 	part:SetAttribute("Rainbow", hue)
 end
 
+-- Pièce d'accent (la couleur d'accent de la créature ; arc-en-ciel si Prismatique)
 local function accent(ctx: Ctx, part: BasePart): BasePart
 	table.insert(ctx.Accents, part)
 	if ctx.RainbowAccents then
@@ -502,38 +519,41 @@ end
 ---------------------------------------------------------------------------
 -- Visage
 ---------------------------------------------------------------------------
--- Gros œil brillant : blanc, grosse pupille, deux reflets. Renvoie le centre de l'œil.
+-- Œil (le même pour toutes les créatures organiques) : ovale blanc, grosse pupille bleu
+-- nuit qui n'en laisse qu'un liseré (lisible sur les peaux sombres), un grand reflet en
+-- haut et un petit en bas, toujours du même côté. Reflets en plastique blanc (pas de néon).
+-- "simple" : un seul reflet (petits yeux). Renvoie le centre de l'œil.
 local function addEye(ctx: Ctx, head: Head, u: number, v: number, size: number, simple: boolean?): Vector3
-	local depth = size * 0.55
-	local cf = onSurface(head, Vector3.new(u, v, -1), depth * 0.22)
-	ellipsoid(ctx, "Eye", Vector3.new(size, size * 1.2, depth), cf, ctx.P.Sclera, SMOOTH)
+	local depth = size * 0.5
+	local cf = onSurface(head, Vector3.new(u, v, -1), depth * 0.2)
+	ellipsoid(ctx, "Eye", Vector3.new(size, size * 1.18, depth), cf, WHITE, SMOOTH)
 	local side = if u > 0.01 then 1 elseif u < -0.01 then -1 else 0
-	local pupilDepth = depth * 0.36
+	local pupilDepth = depth * 0.4
 	ellipsoid(
 		ctx,
 		"Pupil",
-		Vector3.new(size * 0.74, size * 0.9, pupilDepth),
-		cf * CFrame.new(-side * size * 0.06, -size * 0.07, -depth * 0.5 + pupilDepth * 0.4),
+		Vector3.new(size * 0.8, size * 0.98, pupilDepth),
+		cf * CFrame.new(-side * size * 0.04, -size * 0.06, -depth * 0.5 + pupilDepth * 0.45),
 		ctx.P.Pupil,
-		ctx.P.PupilMaterial
+		SMOOTH
 	)
-	ball(ctx, "Shine", size * 0.3, cf * CFrame.new(size * 0.15, size * 0.22, -depth * 0.52), WHITE, NEON)
+	ball(ctx, "Shine", size * 0.34, cf * CFrame.new(size * 0.14, size * 0.2, -depth * 0.55), WHITE, SMOOTH)
 	if not simple then
-		ball(ctx, "Shine", size * 0.14, cf * CFrame.new(-size * 0.16, -size * 0.24, -depth * 0.5), WHITE, NEON)
+		ball(ctx, "Shine", size * 0.15, cf * CFrame.new(-size * 0.15, -size * 0.24, -depth * 0.52), WHITE, SMOOTH)
 	end
 	return cf.Position
 end
 
--- Visière de robot : écran noir brillant + deux yeux néon
+-- Visière de robot : écran sombre + deux yeux d'écran en néon (le seul néon du robot)
 local function addVisor(ctx: Ctx, head: Head, v: number, size: number)
 	local width = math.min(head.R.X * 1.55, size * 2.9)
 	local height = size * 1.15
 	local depth = 0.5
 	local cf = onSurface(head, Vector3.new(0, v, -1), depth * 0.32)
 	if head.Box then
-		box(ctx, "Visor", Vector3.new(width, height, depth), cf, rgb(16, 18, 26), SMOOTH)
+		box(ctx, "Visor", Vector3.new(width, height, depth), cf, SCREEN, SMOOTH)
 	else
-		ellipsoid(ctx, "Visor", Vector3.new(width, height, depth), cf, rgb(16, 18, 26), SMOOTH)
+		ellipsoid(ctx, "Visor", Vector3.new(width, height, depth), cf, SCREEN, SMOOTH)
 	end
 	local front = if head.Box then depth * 0.5 else depth * 0.42
 	for _, side in { -1, 1 } do
@@ -549,10 +569,10 @@ local function addVisor(ctx: Ctx, head: Head, v: number, size: number)
 	end
 end
 
--- Objectif d'appareil photo (drone) : bague sombre + iris néon + reflet
+-- Objectif d'appareil photo (drone, IA) : bague sombre + iris néon + reflet
 local function addLens(ctx: Ctx, head: Head, v: number, size: number)
 	local cf = onSurface(head, Vector3.new(0, v, -1), size * 0.2)
-	ellipsoid(ctx, "Eye", Vector3.new(size * 1.5, size * 1.5, size * 0.7), cf, rgb(28, 30, 40), SMOOTH)
+	ellipsoid(ctx, "Eye", Vector3.new(size * 1.5, size * 1.5, size * 0.7), cf, SCREEN, SMOOTH)
 	accent(
 		ctx,
 		ellipsoid(
@@ -564,22 +584,22 @@ local function addLens(ctx: Ctx, head: Head, v: number, size: number)
 			NEON
 		)
 	)
-	ball(ctx, "Shine", size * 0.32, cf * CFrame.new(size * 0.22, size * 0.24, -size * 0.42), WHITE, NEON)
+	ball(ctx, "Shine", size * 0.3, cf * CFrame.new(size * 0.22, size * 0.24, -size * 0.42), WHITE, SMOOTH)
 end
 
 -- Bouche. "skin" : pièce qui porte la bouche (la lèvre en prend la couleur)
 local function addMouth(ctx: Ctx, head: Head, v: number, size: number, kind: string, skin: BasePart?)
 	local cf = onSurface(head, Vector3.new(0, v, -1), size * 0.12)
 	if (kind == "Smile" or kind == "Wide") and skin then
-		-- Grand sourire en « D » : ovale sombre dont le haut est caché par une lèvre couleur
-		-- de peau (un ovale entier donne un air étonné), langue au fond
-		local width = if kind == "Wide" then 1.36 else 0.95
-		ellipsoid(ctx, "Mouth", Vector3.new(size * width, size * 0.46, size * 0.3), cf, MOUTH, SMOOTH)
+		-- Sourire en « D » : ovale sombre dont le haut est caché par une lèvre couleur de
+		-- peau (un ovale entier donne un air étonné), langue au fond
+		local width = if kind == "Wide" then 1.3 else 0.82
+		ellipsoid(ctx, "Mouth", Vector3.new(size * width, size * 0.44, size * 0.3), cf, MOUTH, SMOOTH)
 		ellipsoid(
 			ctx,
 			"Mouth",
 			Vector3.new(size * width * 0.56, size * 0.18, size * 0.2),
-			cf * CFrame.new(0, -size * 0.15, -size * 0.08),
+			cf * CFrame.new(0, -size * 0.14, -size * 0.08),
 			TONGUE,
 			SMOOTH
 		)
@@ -593,8 +613,8 @@ local function addMouth(ctx: Ctx, head: Head, v: number, size: number, kind: str
 		)
 		ctx.SkinOf[lip] = skin
 	elseif kind == "Smile" or kind == "Wide" or kind == "Fangs" then
-		local width = if kind == "Wide" then 1.3 elseif kind == "Fangs" then 1.0 else 0.62
-		ellipsoid(ctx, "Mouth", Vector3.new(size * width, size * 0.42, size * 0.3), cf, MOUTH, SMOOTH)
+		local width = if kind == "Wide" then 1.2 elseif kind == "Fangs" then 0.95 else 0.6
+		ellipsoid(ctx, "Mouth", Vector3.new(size * width, size * 0.4, size * 0.3), cf, MOUTH, SMOOTH)
 		ellipsoid(
 			ctx,
 			"Mouth",
@@ -608,20 +628,20 @@ local function addMouth(ctx: Ctx, head: Head, v: number, size: number, kind: str
 				ellipsoid(
 					ctx,
 					"Mouth",
-					Vector3.new(size * 0.18, size * 0.32, size * 0.14),
-					cf * CFrame.new(side * size * 0.26, size * 0.05, -size * 0.13),
+					Vector3.new(size * 0.18, size * 0.3, size * 0.14),
+					cf * CFrame.new(side * size * 0.24, size * 0.06, -size * 0.13),
 					WHITE,
 					SMOOTH
 				)
 			end
 		end
 	elseif kind == "O" then
-		ellipsoid(ctx, "Mouth", Vector3.new(size * 0.34, size * 0.44, size * 0.3), cf, MOUTH, SMOOTH)
+		ellipsoid(ctx, "Mouth", Vector3.new(size * 0.34, size * 0.42, size * 0.3), cf, MOUTH, SMOOTH)
 	elseif kind == "Flat" then
 		ellipsoid(
 			ctx,
 			"Mouth",
-			Vector3.new(size * 0.55, size * 0.14, size * 0.28),
+			Vector3.new(size * 0.52, size * 0.14, size * 0.28),
 			cf * CFrame.Angles(0, 0, 0.12),
 			MOUTH,
 			SMOOTH
@@ -639,19 +659,13 @@ local function addFace(ctx: Ctx, shape: Shape)
 	elseif kind == "Lens" then
 		addLens(ctx, head, e.V, e.Size)
 	elseif kind == "Cyclops" then
-		table.insert(eyeCenters, addEye(ctx, head, 0, e.V + 0.04, e.Size * 1.65))
+		table.insert(eyeCenters, addEye(ctx, head, 0, e.V + 0.04, e.Size * 1.6))
 	elseif kind == "Many" then
-		for _, spot in
-			{
-				{ 0, 0.08, 1.15 },
-				{ -0.62, 0.42, 0.62 },
-				{ 0.6, 0.46, 0.58 },
-				{ -0.58, -0.3, 0.5 },
-				{ 0.56, -0.26, 0.48 },
-				{ 0, 0.66, 0.5 },
-			}
-		do
-			addEye(ctx, head, spot[1], spot[2], e.Size * spot[3], spot[3] < 1)
+		-- Un grand œil au centre et deux petits en haut sur les côtés (plus bas, ils se
+		-- lisaient comme des oreilles) : les mêmes yeux que les autres
+		addEye(ctx, head, 0, e.V - 0.06, e.Size * 1.3)
+		for _, side in { -1, 1 } do
+			addEye(ctx, head, side * 0.66, e.V + 0.36, e.Size * 0.6, true)
 		end
 	elseif kind == "Frog" then
 		-- Yeux perchés sur deux bosses (crapaud)
@@ -667,14 +681,8 @@ local function addFace(ctx: Ctx, shape: Shape)
 		end
 	end
 
-	-- 3e œil (Néant)
-	local third = ctx.Style.ThirdEye
-	if kind == "Normal" and third and third[traits.Archetype] then
-		addEye(ctx, head, 0, e.V + 0.62, e.Size * 0.52, true)
-	end
-
-	-- Sourcils froncés (au-dessus de chaque œil, inclinés vers le centre) ; lumineux sur
-	-- une peau sombre (golem de scories), où des sourcils noirs disparaîtraient
+	-- Sourcils froncés (au-dessus de chaque œil, inclinés vers le centre), bleu nuit ; de la
+	-- couleur d'accent sur une peau sombre (golem de scories), où ils disparaîtraient
 	local skinColor = if shape.HeadPart then shape.HeadPart.Color else ctx.P.Body
 	if traits.Brows and #eyeCenters == 2 then
 		local dark = luminance(skinColor) < 0.32
@@ -687,8 +695,8 @@ local function addFace(ctx: Ctx, shape: Shape)
 				"Brow",
 				Vector3.new(e.Size * 0.78, e.Size * thickness, e.Size * 0.3),
 				onSurfaceAt(head, point, e.Size * 0.06) * CFrame.Angles(0, 0, side * 0.42),
-				if dark then ctx.P.Accent else rgb(36, 20, 30),
-				if dark then ctx.P.AccentMaterial else SMOOTH
+				if dark then ctx.P.Accent else INK,
+				SMOOTH
 			)
 			if dark then
 				accent(ctx, brow)
@@ -709,7 +717,7 @@ local function addFace(ctx: Ctx, shape: Shape)
 		for i, center in eyeCenters do
 			local side = if i == 1 then -1 else 1
 			local point = center + Vector3.new(side * e.Size * 0.5, -e.Size * 0.66, 0)
-			ball(ctx, "Spot", e.Size * 0.24, onSurfaceAt(head, point, 0), ctx.Freckles, NEON)
+			ball(ctx, "Spot", e.Size * 0.22, onSurfaceAt(head, point, 0), ctx.Freckles, NEON)
 		end
 	end
 
@@ -717,13 +725,13 @@ local function addFace(ctx: Ctx, shape: Shape)
 	if ctx.Blush and not robot and #eyeCenters == 2 then
 		for i, center in eyeCenters do
 			local side = if i == 1 then -1 else 1
-			local point = center + Vector3.new(side * e.Size * 0.48, -e.Size * 0.66, 0)
+			local point = center + Vector3.new(side * e.Size * 0.48, -e.Size * 0.68, 0)
 			ellipsoid(
 				ctx,
 				"Blush",
-				Vector3.new(e.Size * 0.56, e.Size * 0.3, e.Size * 0.16),
+				Vector3.new(e.Size * 0.52, e.Size * 0.28, e.Size * 0.16),
 				onSurfaceAt(head, point, e.Size * 0.05),
-				BLUSH:Lerp(skinColor, 0.15),
+				BLUSH:Lerp(skinColor, 0.2),
 				SMOOTH
 			)
 		end
@@ -737,17 +745,13 @@ local Archetypes = {}
 
 local function feet(ctx: Ctx, y: number, spacing: number, width: number)
 	for _, side in { -1, 1 } do
-		local foot = ellipsoid(
+		ellipsoid(
 			ctx,
 			"Foot",
 			Vector3.new(width, width * 0.58, width * 1.25),
 			CFrame.new(side * spacing, y, -0.28),
-			if ctx.Style.Robot then ctx.P.Accent else ctx.P.Limb,
-			if ctx.Style.Robot then NEON else nil
+			ctx.P.Limb
 		)
-		if ctx.Style.Robot then
-			accent(ctx, foot)
-		end
 	end
 end
 
@@ -785,8 +789,8 @@ function Archetypes.Blob(ctx: Ctx): Shape
 		Head = body,
 		Body = body,
 		HeadPart = main,
-		Eye = { U = 0.38, V = 0.2, Size = 1.0 },
-		Mouth = -0.2,
+		Eye = { U = 0.38, V = 0.16, Size = 1.0 },
+		Mouth = -0.22,
 	}
 end
 
@@ -794,23 +798,20 @@ function Archetypes.Spiky(ctx: Ctx): Shape
 	local body: Head = { C = Vector3.zero, R = Vector3.new(1.62, 1.52, 1.56) }
 	local main = ellipsoid(ctx, "Body", body.R * 2, CFrame.new(), ctx.P.Body)
 	belly(ctx, body, Vector3.new(0, -1.0, -1), Vector3.new(1.75, 1.05, 0.85))
-	-- Piques sur le dos et le dessus (jamais sur le visage) : longues vers le haut, plus
-	-- courtes sur les côtés et à l'arrière (la créature tient dans sa case de base)
+	-- Huit piques de la couleur d'accent sur le dos et le dessus (jamais sur le visage) :
+	-- longues vers le haut, plus courtes sur les côtés et à l'arrière (la créature tient
+	-- dans sa case de base)
 	local spikes = {
 		{ Vector3.new(0, 1, 0.15), 2.0 },
-		{ Vector3.new(0.62, 0.78, 0.3), 1.85 },
-		{ Vector3.new(-0.62, 0.78, 0.3), 1.85 },
-		{ Vector3.new(0, 0.62, 0.85), 1.55 },
-		{ Vector3.new(0.88, 0.36, 0.55), 1.4 },
-		{ Vector3.new(-0.88, 0.36, 0.55), 1.4 },
-		{ Vector3.new(0.5, 0.0, 0.95), 1.3 },
-		{ Vector3.new(-0.5, 0.0, 0.95), 1.3 },
-		{ Vector3.new(0.38, 0.92, -0.42), 1.6 },
-		{ Vector3.new(-0.38, 0.92, -0.42), 1.6 },
-		{ Vector3.new(0.92, 0.55, -0.12), 1.4 },
-		{ Vector3.new(-0.92, 0.55, -0.12), 1.4 },
+		{ Vector3.new(0.62, 0.78, 0.3), 1.8 },
+		{ Vector3.new(-0.62, 0.78, 0.3), 1.8 },
+		{ Vector3.new(0.4, 0.9, -0.4), 1.5 },
+		{ Vector3.new(-0.4, 0.9, -0.4), 1.5 },
+		{ Vector3.new(0, 0.6, 0.88), 1.5 },
+		{ Vector3.new(0.9, 0.38, 0.5), 1.35 },
+		{ Vector3.new(-0.9, 0.38, 0.5), 1.35 },
 	}
-	for i, spike in spikes do
+	for _, spike in spikes do
 		local dir, length = spike[1].Unit, spike[2]
 		if ctx.Crowned and dir.Y > 0.7 then
 			-- Sous une couronne, les piques du dessus basculent vers l'arrière (raccourcies)
@@ -823,10 +824,9 @@ function Archetypes.Spiky(ctx: Ctx): Shape
 			ellipsoid(
 				ctx,
 				"Spike",
-				Vector3.new(0.78, 0.78, length),
+				Vector3.new(0.8, 0.8, length),
 				lookAt(p, p + dir) * CFrame.new(0, 0, -length * 0.2),
-				if i % 2 == 0 then ctx.P.Accent2 else ctx.P.Accent,
-				ctx.P.AccentMaterial
+				ctx.P.Accent
 			)
 		)
 	end
@@ -837,8 +837,8 @@ function Archetypes.Spiky(ctx: Ctx): Shape
 		Head = body,
 		Body = body,
 		HeadPart = main,
-		Eye = { U = 0.38, V = 0.14, Size = 0.98 },
-		Mouth = -0.26,
+		Eye = { U = 0.38, V = 0.12, Size = 0.98 },
+		Mouth = -0.27,
 	}
 end
 
@@ -854,10 +854,9 @@ function Archetypes.Tall(ctx: Ctx): Shape
 	if traits.Ghost then
 		-- Robe de fantôme à l'ourlet ondulé, pas de pieds : il flotte
 		ellipsoid(ctx, "Body", Vector3.new(2.6, 1.5, 2.3), CFrame.new(0, -1.15, 0.05), ctx.P.Body)
-		for i = 1, 4 do
-			local x = -1.0 + (i - 1) * 0.66
-			local inner = i == 2 or i == 3
-			ball(ctx, "Body", 0.7, CFrame.new(x, -1.78, if inner then -0.25 else -0.1), ctx.P.Body)
+		for i = 1, 3 do
+			local x = -0.82 + (i - 1) * 0.82
+			ball(ctx, "Body", 0.82, CFrame.new(x, -1.75, if i == 2 then -0.28 else -0.12), ctx.P.Body)
 		end
 		hip = 2.7
 	else
@@ -868,8 +867,8 @@ function Archetypes.Tall(ctx: Ctx): Shape
 		Head = head,
 		Body = body,
 		HeadPart = headPart,
-		Eye = { U = 0.37, V = 0.08, Size = 0.98 },
-		Mouth = -0.32,
+		Eye = { U = 0.37, V = 0.06, Size = 0.98 },
+		Mouth = -0.34,
 	}
 end
 
@@ -888,43 +887,45 @@ function Archetypes.Crystal(ctx: Ctx): Shape
 	local body: Head = { C = Vector3.new(0, 0.2, 0), R = Vector3.new(1.42, 1.3, 1.32) }
 	local main = ellipsoid(ctx, "Body", body.R * 2, CFrame.new(body.C), ctx.P.Body)
 	if traits.Snowflake then
-		-- Six branches de flocon derrière le corps, dans le plan du visage
-		for i = 0, 5 do
+		-- Flocon derrière le corps, dans le plan du visage : trois barres qui se croisent au
+		-- centre (six branches) et une pointe en losange au bout de chaque branche
+		for i = 0, 2 do
 			local a = i * math.pi / 3 + math.pi / 2
-			local dir = Vector3.new(math.cos(a), math.sin(a), 0)
-			local cf = CFrame.new(body.C + dir * 1.55 + Vector3.new(0, 0, 0.35)) * CFrame.Angles(0, 0, a - math.pi / 2)
-			accent(ctx, box(ctx, "Spike", Vector3.new(0.5, 1.9, 0.36), cf, ctx.P.Accent, ctx.P.AccentMaterial))
-			accent(
-				ctx,
-				box(
+			local cf = CFrame.new(body.C + Vector3.new(0, 0, 0.35)) * CFrame.Angles(0, 0, a - math.pi / 2)
+			accent(ctx, box(ctx, "Spike", Vector3.new(0.46, 4.8, 0.34), cf, ctx.P.Accent))
+			for _, tip in { 1, -1 } do
+				accent(
 					ctx,
-					"Spike",
-					Vector3.new(0.62, 0.62, 0.36),
-					cf * CFrame.new(0, 0.95, 0) * CFrame.Angles(0, 0, math.rad(45)),
-					ctx.P.Accent2,
-					ctx.P.AccentMaterial
+					box(
+						ctx,
+						"Spike",
+						Vector3.new(0.6, 0.6, 0.34),
+						cf * CFrame.new(0, tip * 2.35, 0) * CFrame.Angles(0, 0, math.rad(45)),
+						ctx.P.Accent
+					)
 				)
-			)
+			end
 		end
 	else
 		-- Pointe de gemme sous le corps
-		accent(ctx, box(ctx, "Spike", Vector3.one * 1.1, gemCFrame(Vector3.new(0, -0.9, 0)), ctx.P.Accent, GLASS))
-		-- Couronne de cristaux sur la tête (derrière la couronne dorée s'il y en a une)
-		local back = if ctx.Crowned then 0.75 else 0
-		for i, data in { { 0, 1.75, 0, 0.62 }, { -0.62, 1.25, 0.25, 0.48 }, { 0.62, 1.3, -0.1, 0.48 } } do
-			local x, height, z, width = data[1], data[2], data[3] + back, data[4]
-			local top = body.C.Y + body.R.Y * (if i == 1 then 0.92 else 0.72) - back * 0.3
-			accent(
-				ctx,
-				box(
+		accent(ctx, box(ctx, "Spike", Vector3.one * 1.1, gemCFrame(Vector3.new(0, -0.9, 0)), ctx.P.Accent))
+		-- Couronne de cristaux sur la tête (remplacée par la couronne dorée dès Légendaire :
+		-- des cristaux repoussés derrière elle se lisaient comme une boîte qui dépasse)
+		if not ctx.Crowned then
+			for i, data in { { 0, 1.75, 0, 0.62 }, { -0.62, 1.25, 0.25, 0.48 }, { 0.62, 1.3, -0.1, 0.48 } } do
+				local x, height, z, width = data[1], data[2], data[3], data[4]
+				local top = body.C.Y + body.R.Y * (if i == 1 then 0.92 else 0.72)
+				accent(
 					ctx,
-					"Spike",
-					Vector3.new(width, height, width),
-					CFrame.new(x, top + height * 0.3, z) * CFrame.Angles(0, math.rad(45), -x * 0.55),
-					if i == 1 then ctx.P.Accent else ctx.P.Accent2,
-					ctx.P.AccentMaterial
+					box(
+						ctx,
+						"Spike",
+						Vector3.new(width, height, width),
+						CFrame.new(x, top + height * 0.3, z) * CFrame.Angles(0, math.rad(45), -x * 0.55),
+						ctx.P.Accent
+					)
 				)
-			)
+			end
 		end
 	end
 	return {
@@ -932,9 +933,9 @@ function Archetypes.Crystal(ctx: Ctx): Shape
 		Head = body,
 		Body = body,
 		HeadPart = main,
-		Eye = { U = 0.4, V = 0.12, Size = 0.92 },
-		Mouth = -0.3,
-		-- Sommet des cristaux (sous une couronne, ils sont repoussés derrière elle)
+		Eye = { U = 0.4, V = 0.1, Size = 0.92 },
+		Mouth = -0.31,
+		-- Sommet des cristaux (la couronne se pose sur la tête)
 		Top = if traits.Snowflake or ctx.Crowned then nil else body.C.Y + body.R.Y + 0.35,
 		Floating = true,
 	}
@@ -945,7 +946,7 @@ function Archetypes.Wisp(ctx: Ctx): Shape
 	local body: Head = { C = Vector3.zero, R = Vector3.new(1.45, 1.36, 1.4) }
 	local main = ellipsoid(ctx, "Body", body.R * 2, CFrame.new(), ctx.P.Body)
 	if not (traits.Tentacles or traits.Propellers or traits.Tail) then
-		-- Queue de fantôme qui remonte derrière
+		-- Queue de fantôme qui remonte derrière, bout de la couleur d'accent
 		ellipsoid(ctx, "Body", Vector3.new(2.0, 1.5, 1.9), CFrame.new(0, -0.7, 0.45), ctx.P.Body)
 		ellipsoid(
 			ctx,
@@ -961,8 +962,7 @@ function Archetypes.Wisp(ctx: Ctx): Shape
 				"Body",
 				Vector3.new(0.72, 0.62, 0.9),
 				CFrame.new(0, -0.52, 1.78) * CFrame.Angles(math.rad(-45), 0, 0),
-				ctx.P.Accent,
-				ctx.P.AccentMaterial
+				ctx.P.Accent
 			)
 		)
 	end
@@ -974,8 +974,8 @@ function Archetypes.Wisp(ctx: Ctx): Shape
 		Head = body,
 		Body = body,
 		HeadPart = main,
-		Eye = { U = 0.4, V = 0.16, Size = 1.0 },
-		Mouth = -0.24,
+		Eye = { U = 0.4, V = 0.14, Size = 1.0 },
+		Mouth = -0.25,
 		Floating = true,
 	}
 end
@@ -996,23 +996,13 @@ function Archetypes.Beast(ctx: Ctx): Shape
 	if not traits.Trunk then
 		local cf = onSurface(head, Vector3.new(0, -0.55, -1), 0.3)
 		muzzlePart = ellipsoid(ctx, "Belly", Vector3.new(1.3, 0.82, 0.8), cf, ctx.P.Belly)
-		ball(ctx, "Nose", 0.4, cf * CFrame.new(0, 0.2, -0.36), ctx.P.Pupil, SMOOTH)
+		ball(ctx, "Nose", 0.4, cf * CFrame.new(0, 0.2, -0.36), INK, SMOOTH)
 		muzzle = { C = cf.Position, R = Vector3.new(0.65, 0.41, 0.4) }
 	end
+	-- Quatre pattes rondes d'une seule pièce
 	for _, z in { -0.25, 1.25 } do
 		for _, side in { -1, 1 } do
-			ellipsoid(ctx, "Leg", Vector3.new(0.82, 1.25, 0.82), CFrame.new(side * 0.74, -1.05, z), ctx.P.Limb)
-			local paw = ellipsoid(
-				ctx,
-				"Foot",
-				Vector3.new(0.95, 0.5, 1.1),
-				CFrame.new(side * 0.74, -1.6, z - 0.12),
-				if ctx.Style.Robot then ctx.P.Accent else ctx.P.Belly,
-				if ctx.Style.Robot then NEON else nil
-			)
-			if ctx.Style.Robot then
-				accent(ctx, paw)
-			end
+			ellipsoid(ctx, "Leg", Vector3.new(0.9, 1.3, 0.95), CFrame.new(side * 0.74, -1.18, z), ctx.P.Limb)
 		end
 	end
 	if not traits.Tail then
@@ -1023,8 +1013,7 @@ function Archetypes.Beast(ctx: Ctx): Shape
 				"Tail",
 				Vector3.new(0.42, 0.42, 1.35),
 				CFrame.new(0, 0.42, 1.95) * CFrame.Angles(math.rad(-38), 0, 0),
-				ctx.P.Accent,
-				ctx.P.AccentMaterial
+				ctx.P.Accent
 			)
 		)
 	end
@@ -1034,7 +1023,7 @@ function Archetypes.Beast(ctx: Ctx): Shape
 		Body = body,
 		HeadPart = headPart,
 		Skin = muzzlePart,
-		Eye = { U = 0.42, V = 0.24, Size = 0.88 },
+		Eye = { U = 0.42, V = 0.22, Size = 0.88 },
 		Mouth = if muzzle then -0.45 else nil,
 		MouthOn = muzzle,
 	}
@@ -1061,7 +1050,7 @@ end
 function Archetypes.Serpent(ctx: Ctx): Shape
 	local head: Head = { C = Vector3.new(0, 1.25, -0.62), R = Vector3.new(1.32, 1.18, 1.22) }
 	for i, seg in SERPENT_SEGMENTS do
-		local color = if i % 2 == 0 then ctx.P.Body:Lerp(ctx.P.Limb, 0.45) else ctx.P.Body
+		local color = if i % 2 == 0 then ctx.P.Body:Lerp(ctx.P.Limb, 0.35) else ctx.P.Body
 		ellipsoid(ctx, "Body", seg[2] * 2, CFrame.new(seg[1]), color)
 	end
 	local headPart = ellipsoid(ctx, "Body", head.R * 2, CFrame.new(head.C), ctx.P.Body)
@@ -1072,8 +1061,8 @@ function Archetypes.Serpent(ctx: Ctx): Shape
 		Head = head,
 		Body = { C = first[1], R = first[2] },
 		HeadPart = headPart,
-		Eye = { U = 0.42, V = 0.2, Size = 0.9 },
-		Mouth = -0.3,
+		Eye = { U = 0.42, V = 0.18, Size = 0.9 },
+		Mouth = -0.31,
 	}
 end
 
@@ -1089,10 +1078,6 @@ function Archetypes.Golem(ctx: Ctx): Shape
 	block("Body", Vector3.new(2.8, 2.3, 2.0), Vector3.zero, ctx.P.Body)
 	if not marshmallow then
 		box(ctx, "Belly", Vector3.new(1.9, 1.35, 0.25), CFrame.new(0, -0.12, -1.0), ctx.P.Belly)
-		if ctx.Style.Robot and not ctx.Traits.Core then
-			-- Voyant de mise sous tension
-			accent(ctx, ball(ctx, "Led", 0.42, CFrame.new(0.5, 0.22, -1.12), ctx.P.Accent, NEON))
-		end
 	end
 	-- Tête de guimauve : cylindre (un ellipsoïde très haut place le visage sur sa face avant)
 	local head: Head = if marshmallow
@@ -1104,10 +1089,10 @@ function Archetypes.Golem(ctx: Ctx): Shape
 		head.C,
 		if marshmallow then ctx.P.Belly else ctx.P.Body
 	)
+	-- Bras d'un bloc (épaule comprise) terminés par un gros poing, jambes courtes
 	for _, side in { -1, 1 } do
-		block("Arm", Vector3.new(1.05, 1.0, 1.25), Vector3.new(side * 1.82, 0.72, 0), ctx.P.Limb)
-		block("Arm", Vector3.new(0.9, 1.5, 0.9), Vector3.new(side * 1.88, -0.35, 0), ctx.P.Limb)
-		block("Arm", Vector3.new(1.15, 0.95, 1.15), Vector3.new(side * 1.92, -1.3, -0.05), ctx.P.Body)
+		block("Arm", Vector3.new(1.0, 1.95, 1.15), Vector3.new(side * 1.84, 0.12, 0), ctx.P.Limb)
+		block("Arm", Vector3.new(1.18, 0.98, 1.2), Vector3.new(side * 1.9, -1.28, -0.05), ctx.P.Body)
 		block("Leg", Vector3.new(1.0, 1.0, 1.1), Vector3.new(side * 0.62, -1.62, 0), ctx.P.Limb)
 	end
 	return {
@@ -1115,8 +1100,8 @@ function Archetypes.Golem(ctx: Ctx): Shape
 		Head = head,
 		HeadPart = headPart,
 		Body = { C = Vector3.zero, R = Vector3.new(1.4, 1.15, 1.0), Box = true },
-		Eye = { U = 0.42, V = 0.12, Size = 0.82 },
-		Mouth = if marshmallow then -0.3 else -0.42,
+		Eye = { U = 0.42, V = 0.1, Size = 0.82 },
+		Mouth = if marshmallow then -0.32 else -0.44,
 		Top = if marshmallow then head.C.Y + 0.9 else nil,
 	}
 end
@@ -1134,7 +1119,7 @@ end
 
 local EARS = {
 	Cat = { Size = Vector3.new(0.74, 1.1, 0.34), Dir = Vector3.new(0.56, 0.82, 0.02), Tilt = 0.3 },
-	Lynx = { Size = Vector3.new(0.74, 1.15, 0.34), Dir = Vector3.new(0.56, 0.82, 0.02), Tilt = 0.25, Tuft = true },
+	Lynx = { Size = Vector3.new(0.76, 1.2, 0.34), Dir = Vector3.new(0.56, 0.82, 0.02), Tilt = 0.25 },
 	Wolf = { Size = Vector3.new(0.72, 1.38, 0.4), Dir = Vector3.new(0.5, 0.86, 0.08), Tilt = 0.18 },
 	Bear = { Size = Vector3.new(0.84, 0.84, 0.38), Dir = Vector3.new(0.64, 0.74, 0.05), Tilt = 0.45 },
 	Bat = { Size = Vector3.new(0.8, 1.55, 0.3), Dir = Vector3.new(0.62, 0.76, 0.1), Tilt = 0.6 },
@@ -1159,22 +1144,23 @@ function Features.Ears(ctx: Ctx, shape: Shape, kind: string)
 	if not spec then
 		return
 	end
-	local inner = if ctx.Style == STYLES.Cyber then ctx.P.Accent else INNER_EAR
+	-- Intérieur rose (couleur d'accent pour les robots)
+	local inner = if ctx.Style.Robot then ctx.P.Accent else INNER_EAR:Lerp(ctx.P.Body, 0.15)
 	for _, side in { -1, 1 } do
 		local p, n = surface(head, Vector3.new(side * spec.Dir.X, spec.Dir.Y, spec.Dir.Z))
 		local up = (n + Vector3.new(side * spec.Tilt, 0.1, 0)).Unit
 		local cf = upright(p + up * spec.Size.Y * 0.3, up)
 		ellipsoid(ctx, "Ear", spec.Size, cf, ctx.P.Body)
-		ellipsoid(
+		local innerPart = ellipsoid(
 			ctx,
 			"Ear",
 			spec.Size * Vector3.new(0.56, 0.68, 0.6),
 			cf * CFrame.new(0, -spec.Size.Y * 0.05, -spec.Size.Z * 0.3),
 			inner,
-			if ctx.Style == STYLES.Cyber then NEON else SMOOTH
+			SMOOTH
 		)
-		if spec.Tuft then
-			ellipsoid(ctx, "Ear", Vector3.new(0.16, 0.55, 0.16), cf * CFrame.new(0, spec.Size.Y * 0.62, 0), INK)
+		if ctx.Style.Robot then
+			accent(ctx, innerPart)
 		end
 	end
 end
@@ -1182,22 +1168,22 @@ end
 function Features.Horns(ctx: Ctx, shape: Shape, kind: string)
 	local head = shape.Head
 	if kind == "Unicorn" then
-		-- Corne torsadée en sucre d'orge (anneaux alternés)
+		-- Corne torsadée en sucre d'orge (anneaux accent / blanc)
 		local p = surface(head, Vector3.new(0, 0.95, -0.55))
 		local up = Vector3.new(0, 1, -0.42).Unit
-		for i = 0, 3 do
-			local width = 0.62 - i * 0.13
-			accent(
+		for i = 0, 2 do
+			local width = 0.6 - i * 0.16
+			local ring = ellipsoid(
 				ctx,
-				ellipsoid(
-					ctx,
-					"Horn",
-					Vector3.new(width, 0.62, width),
-					upright(p + up * (0.12 + i * 0.42), up),
-					if i % 2 == 0 then ctx.P.Belly else WHITE,
-					SMOOTH
-				)
+				"Horn",
+				Vector3.new(width, 0.7, width),
+				upright(p + up * (0.14 + i * 0.5), up),
+				if i % 2 == 0 then ctx.P.Accent else WHITE,
+				SMOOTH
 			)
+			if i % 2 == 0 then
+				accent(ctx, ring)
+			end
 		end
 		return
 	end
@@ -1205,56 +1191,53 @@ function Features.Horns(ctx: Ctx, shape: Shape, kind: string)
 		if kind == "Imp" then
 			local p, n = surface(head, Vector3.new(side * 0.5, 0.88, -0.05))
 			local up = (n + Vector3.new(side * 0.3, 0.25, 0)).Unit
-			ellipsoid(ctx, "Horn", Vector3.new(0.42, 0.95, 0.42), upright(p + up * 0.25, up), ctx.P.Limb)
-			accent(ctx, ball(ctx, "Horn", 0.3, CFrame.new(p + up * 0.72), ctx.P.Accent, ctx.P.AccentMaterial))
+			ellipsoid(ctx, "Horn", Vector3.new(0.46, 1.05, 0.46), upright(p + up * 0.3, up), ctx.P.Limb)
 		elseif kind == "Dragon" then
-			-- Cornes de la couleur du corps, assombries (des cornes crème derrière une couronne
-			-- se lisaient comme des oreilles de lapin) ; couchées vers l'arrière sous une couronne
-			local color = ctx.P.Limb:Lerp(INK, 0.3)
+			-- Cornes de la couleur des membres, assombries (des cornes crème derrière une
+			-- couronne se lisaient comme des oreilles de lapin) ; couchées sous une couronne
+			local color = ctx.P.Limb:Lerp(INK, 0.25)
 			local p, n = surface(head, Vector3.new(side * 0.55, 0.82, 0.25))
 			local up = (n + Vector3.new(side * 0.15, 0.2, 0.55 + (if ctx.Crowned then 0.35 else 0))).Unit
-			ellipsoid(ctx, "Horn", Vector3.new(0.5, 1.15, 0.5), upright(p + up * 0.35, up), color)
-			local up2 = (up + Vector3.new(0, -0.15, 0.6)).Unit
-			ellipsoid(ctx, "Horn", Vector3.new(0.34, 0.9, 0.34), upright(p + up * 0.85 + up2 * 0.3, up2), color)
+			ellipsoid(ctx, "Horn", Vector3.new(0.5, 1.4, 0.5), upright(p + up * 0.45, up), color)
 		elseif kind == "Ram" then
 			local p = surface(head, Vector3.new(side, 0.55, 0.05))
-			for i, data in { { 0, 0.35, 0, 0.72 }, { 0.32, 0.05, -0.32, 0.58 }, { 0.2, -0.3, -0.62, 0.44 } } do
+			for i, data in { { 0, 0.35, 0, 0.74 }, { 0.3, -0.05, -0.34, 0.56 } } do
 				ball(
 					ctx,
 					"Horn",
 					data[4],
 					CFrame.new(p + Vector3.new(side * data[1], data[2], data[3])),
-					if i == 3 then ctx.P.Belly else HORN
+					if i == 2 then ctx.P.Belly else HORN
 				)
 			end
 		elseif kind == "Nub" then
 			local p, n = surface(head, Vector3.new(side * 0.5, 0.86, 0.05))
-			accent(ctx, ellipsoid(ctx, "Horn", Vector3.new(0.48, 0.6, 0.48), upright(p + n * 0.12, n), ctx.P.Accent2))
+			accent(ctx, ellipsoid(ctx, "Horn", Vector3.new(0.48, 0.6, 0.48), upright(p + n * 0.12, n), ctx.P.Accent))
 		end
 	end
 end
 
-function Features.Wings(ctx: Ctx, shape: Shape, kind: string, palette: { Color3 }?)
+function Features.Wings(ctx: Ctx, shape: Shape, kind: string)
 	local body = shape.Body
 	for _, side in { -1, 1 } do
 		local p, n = surface(body, Vector3.new(side * 0.5, 0.42, 0.8))
 		local base = p - n * 0.1
 		if kind == "Bird" or kind == "Angel" then
-			local colors = palette
-				or (if kind == "Angel" then { WHITE, WHITE, GOLD_LIGHT } else { ctx.P.Limb, ctx.P.Body, ctx.P.Accent })
-			for i = 1, 3 do
-				local length = 1.9 - (i - 1) * 0.32
-				local angle = math.rad(28 + (i - 1) * 24)
+			-- Trois plumes (oiseau : membres, corps, accent) ou deux plumes blanches (ange)
+			local colors = if kind == "Angel" then { WHITE, WHITE } else { ctx.P.Limb, ctx.P.Body, ctx.P.Accent }
+			for i, color in colors do
+				local length = 1.9 - (i - 1) * (if kind == "Angel" then 0.45 else 0.32)
+				local angle = math.rad(28 + (i - 1) * (if kind == "Angel" then 34 else 24))
 				local dir = Vector3.new(side * math.cos(angle), math.sin(angle), 0.35).Unit
 				local feather = ellipsoid(
 					ctx,
 					"Wing",
-					Vector3.new(0.26, 0.72, length),
+					Vector3.new(0.26, 0.74, length),
 					lookAt(base, base + dir) * CFrame.new(0, 0, -length * 0.42),
-					colors[i],
-					if kind == "Bird" and i == 3 then ctx.P.AccentMaterial else SMOOTH
+					color,
+					SMOOTH
 				)
-				if kind == "Bird" then
+				if kind == "Bird" and i == 3 then
 					accent(ctx, feather)
 				end
 			end
@@ -1272,6 +1255,7 @@ function Features.Wings(ctx: Ctx, shape: Shape, kind: string, palette: { Color3 
 				)
 			end
 		elseif kind == "Fairy" then
+			-- Ailes de fée : couleur d'accent légèrement translucide (plastique, pas de néon)
 			for i = 1, 2 do
 				local length = if i == 1 then 1.7 else 1.15
 				local angle = math.rad(if i == 1 then 38 else -8)
@@ -1281,10 +1265,10 @@ function Features.Wings(ctx: Ctx, shape: Shape, kind: string, palette: { Color3 
 					"Wing",
 					Vector3.new(0.1, 1.0, length),
 					lookAt(base, base + dir) * CFrame.new(0, 0, -length * 0.42),
-					ctx.P.Accent,
-					NEON
+					ctx.P.Accent:Lerp(WHITE, 0.25),
+					SMOOTH
 				)
-				wing.Transparency = 0.22
+				wing.Transparency = 0.25
 				accent(ctx, wing)
 			end
 		end
@@ -1298,17 +1282,16 @@ function Features.Tail(ctx: Ctx, shape: Shape, kind: string)
 		ball(ctx, "Tail", 0.8, CFrame.new(p + n * 0.2), ctx.P.Belly)
 	elseif kind == "Devil" then
 		local dir = Vector3.new(0, 0.55, 1).Unit
-		ellipsoid(ctx, "Tail", Vector3.new(0.22, 0.22, 1.6), lookAt(p, p + dir) * CFrame.new(0, 0, -0.7), ctx.P.Limb)
+		ellipsoid(ctx, "Tail", Vector3.new(0.24, 0.24, 1.6), lookAt(p, p + dir) * CFrame.new(0, 0, -0.7), ctx.P.Limb)
 		local tip = p + dir * 1.5
 		accent(
 			ctx,
 			box(
 				ctx,
 				"Tail",
-				Vector3.new(0.5, 0.5, 0.16),
+				Vector3.new(0.52, 0.52, 0.18),
 				CFrame.new(tip) * CFrame.Angles(0, 0, math.rad(45)),
-				ctx.P.Accent,
-				ctx.P.AccentMaterial
+				ctx.P.Accent
 			)
 		)
 	elseif kind == "Cat" or kind == "Wolf" then
@@ -1325,29 +1308,34 @@ function Features.Tail(ctx: Ctx, shape: Shape, kind: string)
 				"Tail",
 				Vector3.new(width * 0.8, width * 0.8, length * 0.4),
 				cf * CFrame.new(0, 0, -length * 0.4),
-				if bushy then ctx.P.Belly else ctx.P.Accent,
-				if bushy then SMOOTH else ctx.P.AccentMaterial
+				if bushy then ctx.P.Belly else ctx.P.Accent
 			)
 		)
 	elseif kind == "Feathers" or kind == "Flame" then
+		-- Flamme : langue rouge-orange et pointe jaune ; plumes : membres / accent / membres
 		local flame = kind == "Flame"
-		local colors = if flame
-			then { rgb(255, 92, 10), rgb(255, 170, 20), rgb(255, 236, 120) }
-			else { ctx.P.Limb, ctx.P.Accent2, ctx.P.Accent }
-		for i, data in { { 0, 0.85, 1.55 }, { 0.42, 0.5, 1.25 }, { -0.42, 0.5, 1.25 } } do
-			local dir = Vector3.new(data[1], data[2], 1).Unit
-			local length = data[3]
-			accent(
+		local data = if flame
+			then { { 0, 0.8, 1.5, FLAME }, { 0, 0.55, 0.9, FLAME_CORE } }
+			else {
+				{ 0, 0.85, 1.55, ctx.P.Accent },
+				{ 0.42, 0.5, 1.25, ctx.P.Limb },
+				{ -0.42, 0.5, 1.25, ctx.P.Limb },
+			}
+		for i, spec in data do
+			local dir = Vector3.new(spec[1], spec[2], 1).Unit
+			local length = spec[3]
+			local width = if flame then (if i == 1 then 0.78 else 0.5) else 0.34
+			local part = ellipsoid(
 				ctx,
-				ellipsoid(
-					ctx,
-					"Tail",
-					Vector3.new(if flame then 0.7 else 0.32, if flame then 0.7 else 0.75, length),
-					lookAt(p, p + dir) * CFrame.new(0, 0, -length * 0.4),
-					colors[i],
-					if flame then NEON else ctx.P.AccentMaterial
-				)
+				"Tail",
+				Vector3.new(width, if flame then width else 0.75, length),
+				lookAt(p, p + dir) * CFrame.new(0, if flame and i == 2 then 0.06 else 0, -length * 0.4),
+				spec[4],
+				if spec[4] == FLAME_CORE then NEON else SMOOTH
 			)
+			if spec[4] == ctx.P.Accent or spec[4] == FLAME then
+				accent(ctx, part)
+			end
 		end
 	end
 end
@@ -1356,7 +1344,7 @@ end
 function Features.Beak(ctx: Ctx, shape: Shape)
 	local cf = onSurface(shape.Head, Vector3.new(0, shape.Eye.V - 0.38, -1), 0.12)
 	ellipsoid(ctx, "Beak", Vector3.new(0.78, 0.46, 0.95), cf * CFrame.new(0, 0, -0.18), BEAK, SMOOTH)
-	ellipsoid(ctx, "Beak", Vector3.new(0.6, 0.3, 0.7), cf * CFrame.new(0, -0.22, -0.08), BEAK:Lerp(INK, 0.15), SMOOTH)
+	ellipsoid(ctx, "Beak", Vector3.new(0.6, 0.3, 0.7), cf * CFrame.new(0, -0.22, -0.08), BEAK:Lerp(INK, 0.12), SMOOTH)
 end
 
 -- Trompe et défenses (mammouth)
@@ -1364,60 +1352,43 @@ function Features.Trunk(ctx: Ctx, shape: Shape)
 	local head = shape.Head
 	local p, n = surface(head, Vector3.new(0, -0.32, -1))
 	local start = p + n * 0.1
-	ellipsoid(ctx, "Trunk", Vector3.new(0.78, 0.78, 0.9), CFrame.new(start), ctx.P.Body)
-	ellipsoid(ctx, "Trunk", Vector3.new(0.62, 1.2, 0.62), CFrame.new(start + Vector3.new(0, -0.62, -0.08)), ctx.P.Body)
+	ellipsoid(ctx, "Trunk", Vector3.new(0.8, 1.5, 0.8), CFrame.new(start + Vector3.new(0, -0.45, -0.04)), ctx.P.Body)
 	ellipsoid(
 		ctx,
 		"Trunk",
-		Vector3.new(0.5, 0.5, 0.7),
-		CFrame.new(start + Vector3.new(0, -1.12, -0.18)) * CFrame.Angles(math.rad(25), 0, 0),
+		Vector3.new(0.56, 0.56, 0.78),
+		CFrame.new(start + Vector3.new(0, -1.12, -0.2)) * CFrame.Angles(math.rad(25), 0, 0),
 		ctx.P.Body
 	)
-	-- Défenses courtes qui se relèvent
+	-- Défenses courtes qui pointent vers l'avant
 	for _, side in { -1, 1 } do
 		local q = surface(head, Vector3.new(side * 0.55, -0.55, -1))
-		local dir = Vector3.new(side * 0.35, -0.1, -1).Unit
-		ellipsoid(ctx, "Tusk", Vector3.new(0.34, 0.34, 0.95), lookAt(q, q + dir) * CFrame.new(0, 0, -0.32), HORN)
-		ellipsoid(
-			ctx,
-			"Tusk",
-			Vector3.new(0.3, 0.3, 0.7),
-			CFrame.new(q + dir * 0.72 + Vector3.new(0, 0.2, 0)) * CFrame.Angles(math.rad(65), 0, 0),
-			HORN
-		)
+		local dir = Vector3.new(side * 0.3, 0.25, -1).Unit
+		ellipsoid(ctx, "Tusk", Vector3.new(0.34, 0.34, 1.05), lookAt(q, q + dir) * CFrame.new(0, 0, -0.36), HORN)
 	end
 end
 
--- Tentacules (méduse) sous le corps
+-- Tentacules (méduse) sous le corps : une jupe claire et six tentacules d'une pièce
 function Features.Tentacles(ctx: Ctx, shape: Shape)
 	local body = shape.Body
 	ellipsoid(ctx, "Belly", Vector3.new(3.0, 0.75, 2.9), CFrame.new(body.C + Vector3.new(0, -0.62, 0)), ctx.P.Belly)
 	for i = 1, 6 do
 		local a = (i / 6) * math.pi * 2 + 0.3
 		local x, z = math.cos(a) * 0.9, math.sin(a) * 0.85
-		local y = body.C.Y - 1.15
 		local tentacle = ellipsoid(
 			ctx,
 			"Tentacle",
-			Vector3.new(0.38, 1.2, 0.38),
-			CFrame.new(x, y, z) * CFrame.Angles(0, 0, if i % 2 == 0 then 0.2 else -0.2),
-			if i % 2 == 0 then ctx.P.Accent else ctx.P.Limb,
-			if i % 2 == 0 then ctx.P.AccentMaterial else nil
+			Vector3.new(0.42, 1.7, 0.42),
+			CFrame.new(x * 1.06, body.C.Y - 1.45, z * 1.06) * CFrame.Angles(-math.sin(a) * 0.22, 0, math.cos(a) * 0.22),
+			if i % 2 == 0 then ctx.P.Accent else ctx.P.Limb
 		)
 		if i % 2 == 0 then
 			accent(ctx, tentacle)
 		end
-		ellipsoid(
-			ctx,
-			"Tentacle",
-			Vector3.new(0.3, 0.9, 0.3),
-			CFrame.new(x * 1.12, y - 0.85, z * 1.12) * CFrame.Angles(0, 0, if i % 2 == 0 then -0.25 else 0.25),
-			ctx.P.Limb
-		)
 	end
 end
 
--- Hélices (drone)
+-- Hélices (drone) : quatre bras et quatre disques d'hélice de la couleur d'accent
 function Features.Propellers(ctx: Ctx, shape: Shape)
 	local body = shape.Body
 	for i = 1, 4 do
@@ -1427,13 +1398,12 @@ function Features.Propellers(ctx: Ctx, shape: Shape)
 		box(
 			ctx,
 			"Arm",
-			Vector3.new(0.26, 0.2, 1.4),
+			Vector3.new(0.28, 0.22, 1.5),
 			CFrame.new(body.C + dir * 1.45 + Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, -a + math.pi / 2, 0),
 			STEEL
 		)
-		cylinder(ctx, "Arm", 0.4, 0.34, CFrame.new(tip), STEEL)
-		local rotor = cylinder(ctx, "Rotor", 0.06, 1.55, CFrame.new(tip + Vector3.new(0, 0.24, 0)), ctx.P.Accent, NEON)
-		rotor.Transparency = 0.45
+		local rotor = cylinder(ctx, "Rotor", 0.08, 1.5, CFrame.new(tip + Vector3.new(0, 0.12, 0)), ctx.P.Accent)
+		rotor.Transparency = 0.3
 		accent(ctx, rotor)
 	end
 end
@@ -1449,8 +1419,7 @@ function Features.Fins(ctx: Ctx, shape: Shape)
 			"Fin",
 			Vector3.new(0.22, 1.35, 1.5),
 			CFrame.new(p + Vector3.new(0, 0.3, 0.2)) * CFrame.Angles(math.rad(25), 0, 0),
-			ctx.P.Accent,
-			ctx.P.AccentMaterial
+			ctx.P.Accent
 		)
 	)
 	for _, side in { -1, 1 } do
@@ -1462,8 +1431,7 @@ function Features.Fins(ctx: Ctx, shape: Shape)
 				"Fin",
 				Vector3.new(0.18, 0.95, 1.2),
 				CFrame.new(q + Vector3.new(side * 0.2, 0.1, 0.15)) * CFrame.Angles(0, side * 0.5, side * -0.6),
-				ctx.P.Accent2,
-				ctx.P.AccentMaterial
+				ctx.P.Accent
 			)
 		)
 	end
@@ -1482,86 +1450,73 @@ function Features.Frills(ctx: Ctx, shape: Shape)
 				ellipsoid(
 					ctx,
 					"Frill",
-					Vector3.new(0.26, 0.3, 1.05),
+					Vector3.new(0.3, 0.34, 1.05),
 					lookAt(p, p + dir) * CFrame.new(0, 0, -0.4),
-					if i == 2 then ctx.P.Accent else ctx.P.Accent2,
-					ctx.P.AccentMaterial
+					ctx.P.Accent
 				)
 			)
 		end
 	end
 end
 
--- Taches lumineuses sur le dos
+-- Taches de la couleur d'accent sur le dos (crapaud)
 function Features.Spots(ctx: Ctx, shape: Shape)
 	local target = shape.Body
 	for i, dir in
 		{
-			Vector3.new(0.45, 0.75, 0.5),
-			Vector3.new(-0.5, 0.65, 0.6),
-			Vector3.new(0.1, 0.9, 0.25),
-			Vector3.new(0.65, 0.3, 0.75),
-			Vector3.new(-0.62, 0.25, 0.8),
+			Vector3.new(0.5, 0.72, 0.5),
+			Vector3.new(-0.55, 0.62, 0.62),
+			Vector3.new(0.1, 0.88, 0.3),
 		}
 	do
-		local size = if i % 2 == 0 then 0.55 else 0.42
+		local size = if i == 3 then 0.62 else 0.5
 		accent(
 			ctx,
-			ellipsoid(
-				ctx,
-				"Spot",
-				Vector3.new(size, size * 0.8, 0.2),
-				onSurface(target, dir, 0.04),
-				ctx.P.Accent,
-				ctx.P.AccentMaterial
-			)
+			ellipsoid(ctx, "Spot", Vector3.new(size, size * 0.8, 0.2), onSurface(target, dir, 0.04), ctx.P.Accent)
 		)
 	end
 end
 
--- Fissures lumineuses (golems de lave)
+-- Fissures de lave lumineuses (golem de scories) : leur néon EST la créature
 function Features.Cracks(ctx: Ctx, shape: Shape)
 	local body = shape.Body
 	-- Autour de la plaque de ventre (coins hauts et flancs)
 	for _, data in
 		{
 			{ -0.95, 0.82, 0.7, 0.75 },
-			{ -0.6, 0.88, -0.5, 0.5 },
 			{ 1.0, 0.8, -0.6, 0.7 },
 			{ 1.18, -0.45, 0.35, 0.8 },
-			{ -1.18, -0.6, -0.3, 0.7 },
 		}
 	do
 		local cf = CFrame.new(body.C + Vector3.new(data[1], data[2], -body.R.Z - 0.03)) * CFrame.Angles(0, 0, data[3])
-		accent(ctx, box(ctx, "Crack", Vector3.new(0.17, data[4], 0.12), cf, ctx.P.Accent, NEON))
+		accent(ctx, box(ctx, "Crack", Vector3.new(0.18, data[4], 0.12), cf, ctx.P.Accent, NEON))
 	end
 end
 
--- Cœur lumineux dans la poitrine (titans)
+-- Cœur d'énergie lumineux dans la poitrine (titans)
 function Features.Core(ctx: Ctx, shape: Shape)
 	local cf = onSurface(shape.Body, Vector3.new(0, 0, -1), 0.1)
-	ellipsoid(ctx, "Core", Vector3.new(1.2, 1.2, 0.5), cf, rgb(34, 30, 44), SMOOTH)
-	accent(ctx, ball(ctx, "Core", 0.82, cf * CFrame.new(0, 0, -0.12), ctx.P.Accent, NEON))
+	ellipsoid(ctx, "Core", Vector3.new(1.2, 1.2, 0.5), cf, SCREEN, SMOOTH)
+	accent(ctx, ball(ctx, "Core", 0.8, cf * CFrame.new(0, 0, -0.12), ctx.P.Accent, NEON))
 end
 
--- Crête de plumes de feu (phénix)
+-- Crête de plumes (phénix)
 function Features.Crest(ctx: Ctx, shape: Shape)
 	local head = shape.Head
 	local p = surface(head, Vector3.new(0, 1, 0.1))
 	for i, data in { { 0, 1.35, 0.15 }, { -0.25, 1.0, 0.55 }, { 0.25, 1.0, 0.55 } } do
 		local dir = Vector3.new(data[1], 1, data[3]).Unit
 		local length = data[2]
-		accent(
+		local part = ellipsoid(
 			ctx,
-			ellipsoid(
-				ctx,
-				"Crest",
-				Vector3.new(0.34, 0.5, length),
-				lookAt(p, p + dir) * CFrame.new(0, 0, -length * 0.38),
-				if i == 1 then ctx.P.Accent else ctx.P.Accent2,
-				NEON
-			)
+			"Crest",
+			Vector3.new(0.36, 0.5, length),
+			lookAt(p, p + dir) * CFrame.new(0, 0, -length * 0.38),
+			if i == 1 then ctx.P.Accent else FLAME
 		)
+		if i == 1 then
+			accent(ctx, part)
+		end
 	end
 end
 
@@ -1578,43 +1533,50 @@ function Features.Spines(ctx: Ctx, _shape: Shape)
 					"Spike",
 					Vector3.new(0.3, 0.85, 0.55) * (1.1 - i * 0.12),
 					upright(top, Vector3.yAxis + tangent * 0.45, -tangent),
-					ctx.P.Accent,
-					ctx.P.AccentMaterial
+					ctx.P.Accent
 				)
 			)
 		end
 	end
 end
 
--- Écharpe (pingouin)
-function Features.Scarf(ctx: Ctx, shape: Shape, color: Color3)
+-- Écharpe de la couleur d'accent (pingouin)
+function Features.Scarf(ctx: Ctx, shape: Shape)
 	local body = shape.Body
 	local y = -0.42
 	local k = math.sqrt(1 - (y / body.R.Y) ^ 2)
-	ellipsoid(
+	accent(
 		ctx,
-		"Scarf",
-		Vector3.new(body.R.X * 2 * k + 0.2, 0.46, body.R.Z * 2 * k + 0.2),
-		CFrame.new(0, y, 0),
-		color
+		ellipsoid(
+			ctx,
+			"Scarf",
+			Vector3.new(body.R.X * 2 * k + 0.2, 0.46, body.R.Z * 2 * k + 0.2),
+			CFrame.new(0, y, 0),
+			ctx.P.Accent
+		)
 	)
 	local p = surface(body, Vector3.new(0.45, y - 0.25, -1))
-	box(
+	accent(
 		ctx,
-		"Scarf",
-		Vector3.new(0.48, 0.95, 0.22),
-		CFrame.new(p + Vector3.new(0, -0.3, -0.12)) * CFrame.Angles(0.2, 0, 0.12),
-		color
+		box(
+			ctx,
+			"Scarf",
+			Vector3.new(0.48, 0.95, 0.22),
+			CFrame.new(p + Vector3.new(0, -0.3, -0.12)) * CFrame.Angles(0.2, 0, 0.12),
+			ctx.P.Accent
+		)
 	)
 end
 
--- Cape dans le dos
-function Features.Cape(ctx: Ctx, shape: Shape, color: Color3)
+-- Cape dans le dos (couleur donnée, ou la couleur d'accent) et col d'hermine
+function Features.Cape(ctx: Ctx, shape: Shape, color: Color3?)
 	local body = shape.Body
 	local cf = CFrame.new(body.C + Vector3.new(0, 0.1, body.R.Z + 0.08)) * CFrame.Angles(math.rad(-8), 0, 0)
-	ellipsoid(ctx, "Cape", Vector3.new(body.R.X * 2.3, body.R.Y * 2.5, 0.3), cf, color)
+	local cape = ellipsoid(ctx, "Cape", Vector3.new(body.R.X * 2.3, body.R.Y * 2.5, 0.3), cf, color or ctx.P.Accent)
+	if not color then
+		accent(ctx, cape)
+	end
 	if shape.Head ~= shape.Body then
-		-- Col d'hermine entre le corps et la tête
 		ellipsoid(
 			ctx,
 			"Cape",
@@ -1627,7 +1589,7 @@ end
 
 -- Capuche (archonte) : tissu de la couleur des membres à peine assombri (une capuche
 -- noire faisait de la tête une boule de bowling), posée en arrière pour dégager le visage,
--- liseré néon qui encadre le visage
+-- liseré de la couleur d'accent
 function Features.Hood(ctx: Ctx, shape: Shape)
 	local head = shape.Head
 	local cloth = ctx.P.Limb:Lerp(INK, 0.12)
@@ -1642,23 +1604,25 @@ function Features.Hood(ctx: Ctx, shape: Shape)
 		CFrame.new(center + Vector3.new(0, size.Y * 0.38, size.Z * 0.3)) * CFrame.Angles(math.rad(50), 0, 0),
 		cloth
 	)
-	-- Liseré : disque néon juste derrière l'avant du visage, plus haut que lui. La tête en
-	-- cache le centre et le bas : il ne reste qu'un arc autour du front et des tempes
+	-- Liseré de la couleur d'accent (plastique) : disque juste derrière l'avant du visage,
+	-- plus haut que lui ; la tête en cache le centre et le bas, il ne reste qu'un arc
+	-- autour du front et des tempes
 	local depth = 0.7
 	local k = math.sqrt(1 - depth * depth) -- section de la tête à cette profondeur
-	local trim = ellipsoid(
+	accent(
 		ctx,
-		"Hood",
-		Vector3.new(head.R.X * k * 2 + 0.3, head.R.Y * k * 2 + 0.16, 0.24),
-		CFrame.new(head.C + Vector3.new(0, 0.24, -head.R.Z * depth)),
-		ctx.P.Accent,
-		ctx.P.AccentMaterial
+		ellipsoid(
+			ctx,
+			"Hood",
+			Vector3.new(head.R.X * k * 2 + 0.3, head.R.Y * k * 2 + 0.16, 0.24),
+			CFrame.new(head.C + Vector3.new(0, 0.24, -head.R.Z * depth)),
+			ctx.P.Accent
+		)
 	)
-	accent(ctx, trim)
 	shape.Top = center.Y + size.Y * 0.5 - 0.1
 end
 
--- Casque de chevalier de glace + plumet
+-- Casque de chevalier de glace + plumet de la couleur d'accent
 function Features.Helmet(ctx: Ctx, shape: Shape)
 	local head = shape.Head
 	local c = head.C + Vector3.new(0, 0.95, 0.06)
@@ -1677,8 +1641,7 @@ function Features.Helmet(ctx: Ctx, shape: Shape)
 			"Helmet",
 			Vector3.new(0.42, 1.0, 1.5),
 			CFrame.new(c + Vector3.new(0, 1.15, 0.45)) * CFrame.Angles(math.rad(30), 0, 0),
-			ctx.P.Accent,
-			ctx.P.AccentMaterial
+			ctx.P.Accent
 		)
 	)
 	shape.Top = c.Y + head.R.Y * 0.62
@@ -1696,9 +1659,9 @@ function Features.Staff(ctx: Ctx, shape: Shape, kind: string)
 	local stick = if kind == "Spear" then STEEL elseif kind == "Lollipop" then WHITE else GOLD
 	cylinder(ctx, "Staff", length, 0.24, upright(base + up * length * 0.5, up), stick)
 	if kind == "Lollipop" then
-		-- Disque de sucre d'orge face à la caméra : anneaux concentriques = spirale
+		-- Disque de sucre d'orge face à la caméra : anneaux concentriques accent / blanc
 		local center = top + up * 0.75
-		for i, data in { { 1.7, ctx.P.Accent }, { 1.2, WHITE }, { 0.76, ctx.P.Body }, { 0.36, WHITE } } do
+		for i, data in { { 1.7, ctx.P.Accent }, { 1.15, WHITE }, { 0.6, ctx.P.Accent } } do
 			local ring = newPart(
 				ctx,
 				"Staff",
@@ -1708,149 +1671,92 @@ function Features.Staff(ctx: Ctx, shape: Shape, kind: string)
 				SMOOTH
 			)
 			ring.Shape = Enum.PartType.Cylinder
-			if i == 1 then
+			if data[2] == ctx.P.Accent then
 				accent(ctx, ring)
 			end
 		end
 	elseif kind == "Spear" then
-		accent(
-			ctx,
-			ellipsoid(ctx, "Staff", Vector3.new(0.5, 1.3, 0.5), upright(top + up * 0.45, up), ctx.P.Accent, GLASS)
-		)
+		accent(ctx, ellipsoid(ctx, "Staff", Vector3.new(0.5, 1.3, 0.5), upright(top + up * 0.45, up), ctx.P.Accent))
 	elseif kind == "Wand" then
-		local star = ctx.P.Accent
-		accent(ctx, ball(ctx, "Staff", 0.75, CFrame.new(top + up * 0.3), star, NEON))
-		for i = 0, 3 do
+		-- Flocon de givre face à la caméra : une perle et trois branches croisées (six pointes)
+		local center = top + up * 0.4
+		accent(ctx, ball(ctx, "Staff", 0.62, CFrame.new(center), ctx.P.Accent))
+		for i = 0, 2 do
 			accent(
 				ctx,
 				box(
 					ctx,
 					"Staff",
-					Vector3.new(0.2, 1.25, 0.2),
-					CFrame.new(top + up * 0.3) * CFrame.Angles(0, 0, i * math.pi / 4),
-					star,
-					NEON
+					Vector3.new(0.2, 1.5, 0.2),
+					CFrame.new(center) * CFrame.Angles(0, 0, i * math.pi / 3),
+					ctx.P.Accent
 				)
 			)
 		end
 	else
 		ball(ctx, "Staff", 0.75, CFrame.new(top + up * 0.3), GOLD, SMOOTH)
-		accent(
-			ctx,
-			ball(ctx, "Staff", 0.42, CFrame.new(top + up * 0.3 + Vector3.new(0, 0, -0.3)), rgb(255, 40, 90), NEON)
-		)
+		accent(ctx, ball(ctx, "Staff", 0.42, CFrame.new(top + up * 0.3 + Vector3.new(0, 0, -0.3)), ctx.P.Accent))
 	end
 end
 
--- Touffes de fourrure (yéti, mammouth)
+-- Touffes de fourrure (yéti, mammouth) : deux épaules et le haut de la tête
 function Features.Fur(ctx: Ctx, shape: Shape)
 	local target = shape.Body
-	local fur = if ctx.P.Body.R + ctx.P.Body.G + ctx.P.Body.B > 2.6 then ctx.P.Limb else WHITE
-	for i, dir in
-		{
-			Vector3.new(0.7, 0.62, 0.2),
-			Vector3.new(-0.7, 0.62, 0.2),
-			Vector3.new(0.35, 0.85, 0.65),
-			Vector3.new(-0.35, 0.85, 0.65),
-			Vector3.new(0, 0.95, -0.1),
-		}
-	do
+	local fur = if ctx.P.Body.R + ctx.P.Body.G + ctx.P.Body.B > 2.6 then ctx.P.Limb else ctx.P.Belly
+	for _, dir in { Vector3.new(0.72, 0.62, 0.1), Vector3.new(-0.72, 0.62, 0.1) } do
 		local p = surface(target, dir)
-		ball(ctx, "Fur", if i == 5 then 1.0 else 0.82, CFrame.new(p), fur)
+		ball(ctx, "Fur", 0.95, CFrame.new(p), fur)
 	end
 	local top = surface(shape.Head, Vector3.new(0.1, 1, 0.15))
-	ball(ctx, "Fur", 0.85, CFrame.new(top), fur)
+	ball(ctx, "Fur", 0.9, CFrame.new(top), fur)
 end
 
--- Nuages de barbe à papa sur le dos
+-- Nuages de barbe à papa sur le dos (blanc, accent, blanc)
 function Features.Clouds(ctx: Ctx, _shape: Shape)
-	local colors = { rgb(255, 150, 216), rgb(120, 214, 255), rgb(255, 255, 255), rgb(255, 150, 216) }
 	for i, seg in SERPENT_SEGMENTS do
-		if i <= 4 then
-			ball(ctx, "Cloud", 1.25 - i * 0.12, CFrame.new(seg[1] + Vector3.new(0, seg[2].Y * 0.85, 0.05)), colors[i])
+		if i <= 3 then
+			local cloud = ball(
+				ctx,
+				"Cloud",
+				1.3 - i * 0.12,
+				CFrame.new(seg[1] + Vector3.new(0, seg[2].Y * 0.85, 0.05)),
+				if i == 2 then ctx.P.Accent else WHITE
+			)
+			if i == 2 then
+				accent(ctx, cloud)
+			end
 		end
 	end
 end
 
--- Vermicelles colorés
-function Features.Sprinkles(ctx: Ctx, shape: Shape)
-	local target = shape.Head
-	local colors = {
-		rgb(255, 60, 90),
-		rgb(255, 214, 40),
-		rgb(60, 220, 120),
-		rgb(40, 180, 255),
-		rgb(255, 255, 255),
-		rgb(170, 90, 255),
-	}
-	for i, dir in
-		{
-			Vector3.new(0.5, 0.85, 0.1),
-			Vector3.new(-0.45, 0.88, 0.25),
-			Vector3.new(0.1, 0.95, 0.5),
-			Vector3.new(-0.15, 0.92, -0.35),
-			Vector3.new(0.7, 0.6, 0.45),
-			Vector3.new(-0.72, 0.55, -0.2),
-		}
-	do
-		local p, n = surface(target, dir)
-		box(
-			ctx,
-			"Sprinkle",
-			Vector3.new(0.16, 0.16, 0.5),
-			lookAt(p, p + n) * CFrame.Angles(0, 0, i * 1.1) * CFrame.Angles(math.rad(80), 0, 0),
-			colors[i],
-			SMOOTH
-		)
-	end
-end
-
--- Cubes « bug » qui flottent autour (glitch)
-function Features.Glitch(ctx: Ctx, shape: Shape)
-	local body = shape.Body
-	for i, data in { { 1.0, 0.8, -0.4, 0.55 }, { -1.15, 0.2, 0.3, 0.45 }, { 0.75, -0.55, 0.8, 0.4 } } do
-		local part = box(
-			ctx,
-			"Glitch",
-			Vector3.one * data[4],
-			CFrame.new(body.C + Vector3.new(data[1] * (body.R.X + 0.3), data[2], data[3])),
-			if i == 2 then rgb(255, 50, 200) else ctx.P.Accent2,
-			NEON
-		)
-		accent(ctx, part)
-	end
-end
-
--- Anneau planétaire (IA, singularité) : un disque fin traversant le corps
+-- Anneau planétaire (IA, singularité) : un disque fin de la couleur d'accent
 function Features.Ring(ctx: Ctx, shape: Shape)
 	local body = shape.Body
-	local ring = cylinder(
+	accent(
 		ctx,
-		"Ring",
-		0.16,
-		math.max(body.R.X, body.R.Z) * 2.5,
-		CFrame.new(body.C) * CFrame.Angles(math.rad(-24), 0, math.rad(-20)),
-		ctx.P.Accent,
-		NEON
+		cylinder(
+			ctx,
+			"Ring",
+			0.14,
+			math.max(body.R.X, body.R.Z) * 2.5,
+			CFrame.new(body.C) * CFrame.Angles(math.rad(-24), 0, math.rad(-20)),
+			ctx.P.Accent
+		)
 	)
-	ring.Transparency = 0.2
-	accent(ctx, ring)
 end
 
 -- Cristaux de glace en orbite (Zéro Absolu)
 function Features.OrbitCrystals(ctx: Ctx, shape: Shape)
 	local body = shape.Body
 	local radius = orbitRadius(ctx, 2.3, 0.56)
-	for i = 1, 4 do
-		local a = i * math.pi / 2 + 0.4
+	for i = 1, 3 do
+		local a = i * math.pi * 2 / 3 + 0.4
 		local part = box(
 			ctx,
 			"Orbit",
-			Vector3.new(0.42, 1.0, 0.42),
-			CFrame.new(math.cos(a) * radius, orbitHeight(body, i, 0.35), math.sin(a) * radius)
-				* CFrame.Angles(0, a, 0.5),
-			ctx.P.Accent,
-			NEON
+			Vector3.new(0.44, 1.0, 0.44),
+			CFrame.new(math.cos(a) * radius, orbitHeight(body, i, 0.3), math.sin(a) * radius) * CFrame.Angles(0, a, 0.5),
+			ctx.P.Accent
 		)
 		accent(ctx, part)
 	end
@@ -1862,31 +1768,38 @@ function Features.Shards(ctx: Ctx, shape: Shape)
 	for i, data in { { 0, 1, 0.1, 1.2 }, { 0.45, 0.85, 0.5, 0.9 }, { -0.45, 0.85, 0.55, 0.85 } } do
 		local dir = Vector3.new(data[1], data[2], data[3]).Unit
 		local p = surface(body, dir)
+		local shard = box(
+			ctx,
+			"Spike",
+			Vector3.new(0.48, data[4], 0.48),
+			upright(p + dir * data[4] * 0.25, dir) * CFrame.Angles(0, math.rad(45), 0),
+			if i == 1 then ctx.P.Accent else WHITE
+		)
+		if i == 1 then
+			accent(ctx, shard)
+		end
+	end
+end
+
+-- Crinière de bonbons (licorne) : trois boules de la couleur d'accent
+function Features.Mane(ctx: Ctx, shape: Shape)
+	local head = shape.Head
+	for i = 1, 3 do
+		local p = surface(head, Vector3.new(if i % 2 == 0 then 0.25 else -0.25, 1, -0.3 + i * 0.45))
 		accent(
 			ctx,
-			box(
+			ball(
 				ctx,
-				"Spike",
-				Vector3.new(0.48, data[4], 0.48),
-				upright(p + dir * data[4] * 0.25, dir) * CFrame.Angles(0, math.rad(45), 0),
-				if i == 1 then ctx.P.Accent else WHITE,
-				GLASS
+				"Mane",
+				1.0 - i * 0.1,
+				CFrame.new(p + Vector3.new(0, 0.1, 0.12 * i)),
+				ctx.P.Accent:Lerp(WHITE, (i - 1) * 0.12)
 			)
 		)
 	end
 end
 
--- Crinière de bonbons (licorne)
-function Features.Mane(ctx: Ctx, shape: Shape)
-	local head = shape.Head
-	local colors = { rgb(255, 92, 186), rgb(255, 214, 46), rgb(56, 230, 196), rgb(90, 170, 255) }
-	for i = 1, 4 do
-		local p = surface(head, Vector3.new(if i % 2 == 0 then 0.25 else -0.25, 1, -0.45 + i * 0.4))
-		ball(ctx, "Mane", 0.98 - i * 0.08, CFrame.new(p + Vector3.new(0, 0.12, 0.1 * i)), colors[i])
-	end
-end
-
--- Deux têtes supplémentaires sur de longs cous (hydre)
+-- Deux têtes supplémentaires sur de longs cous (hydre) : yeux simples, sans bouche
 function Features.Heads(ctx: Ctx, shape: Shape)
 	local body = shape.Body
 	for _, side in { -1, 1 } do
@@ -1901,11 +1814,10 @@ function Features.Heads(ctx: Ctx, shape: Shape)
 			ctx.P.Body:Lerp(ctx.P.Limb, 0.35)
 		)
 		local small: Head = { C = headCenter + dir * 0.1, R = Vector3.new(0.88, 0.8, 0.84) }
-		local smallPart = ellipsoid(ctx, "Body", small.R * 2, CFrame.new(small.C), ctx.P.Body)
+		ellipsoid(ctx, "Body", small.R * 2, CFrame.new(small.C), ctx.P.Body)
 		for _, eyeSide in { -1, 1 } do
-			addEye(ctx, small, eyeSide * 0.4, 0.18, 0.6, true)
+			addEye(ctx, small, eyeSide * 0.4, 0.1, 0.6, true)
 		end
-		addMouth(ctx, small, -0.34, 0.6, "Smile", smallPart)
 	end
 end
 
@@ -1914,25 +1826,29 @@ end
 ---------------------------------------------------------------------------
 local Toppers = {}
 
--- Flamme de dessin animé (pièces opaques) : base orange, langue principale, cœur jaune
--- devant, pointe claire et deux petites langues sur les côtés
+-- Flamme de dessin animé (silhouette 🔥) : socle arrondi orange, grande langue centrale
+-- jaune penchée vers l'arrière, deux petites langues orange penchées vers l'extérieur ;
+-- cœur jaune pâle lumineux devant (le seul néon de la flamme)
 local function flame(ctx: Ctx, base: Vector3, scale: number)
-	local function tongue(size: Vector3, offset: Vector3, roll: number, color: Color3): Part
+	local function lick(size: Vector3, offset: Vector3, roll: number, pitch: number, color: Color3, material): Part
 		return ellipsoid(
 			ctx,
 			"Flame",
 			size * scale,
-			CFrame.new(base + offset * scale) * CFrame.Angles(math.rad(14), 0, roll),
+			CFrame.new(base + offset * scale) * CFrame.Angles(math.rad(pitch), 0, math.rad(roll)),
 			color,
-			NEON
+			material
 		)
 	end
-	accent(ctx, tongue(Vector3.new(1.25, 1.05, 1.2), Vector3.new(0, 0.42, 0), 0, rgb(255, 72, 12)))
-	tongue(Vector3.new(0.9, 1.65, 0.85), Vector3.new(0, 1.0, 0.1), 0.06, rgb(255, 120, 14))
-	tongue(Vector3.new(0.5, 0.9, 0.5), Vector3.new(0.18, 0.62, -0.22), -0.4, rgb(255, 120, 14))
-	tongue(Vector3.new(0.46, 0.8, 0.46), Vector3.new(-0.22, 0.55, -0.15), 0.45, rgb(255, 120, 14))
-	tongue(Vector3.new(0.55, 1.0, 0.4), Vector3.new(0, 0.72, -0.36), 0, rgb(255, 210, 40))
-	tongue(Vector3.new(0.3, 0.6, 0.3), Vector3.new(0.02, 1.72, 0.22), 0.1, rgb(255, 246, 170))
+	accent(ctx, lick(Vector3.new(1.25, 0.95, 1.15), Vector3.new(0, 0.35, 0.05), 0, 0, FLAME, SMOOTH))
+	accent(ctx, lick(Vector3.new(0.7, 1.75, 0.66), Vector3.new(0, 1.05, 0.15), 0, 14, FLAME_TIP, SMOOTH))
+	for _, side in { -1, 1 } do
+		accent(
+			ctx,
+			lick(Vector3.new(0.46, 1.05, 0.46), Vector3.new(side * 0.42, 0.72, 0.1), -side * 28, 8, FLAME, SMOOTH)
+		)
+	end
+	lick(Vector3.new(0.6, 0.85, 0.46), Vector3.new(0, 0.55, -0.38), 0, 8, FLAME_CORE, NEON)
 end
 
 function Toppers.Flame(ctx: Ctx, shape: Shape)
@@ -1940,25 +1856,25 @@ function Toppers.Flame(ctx: Ctx, shape: Shape)
 end
 
 function Toppers.BigFlame(ctx: Ctx, shape: Shape)
-	flame(ctx, headTop(shape) - Vector3.new(0, 0.45, -0.1), 1.45)
+	flame(ctx, headTop(shape) - Vector3.new(0, 0.45, -0.1), 1.4)
 end
 
 function Toppers.Crest(ctx: Ctx, shape: Shape)
 	Features.Crest(ctx, shape)
 end
 
--- Néant : deux antennes terminées par une perle lumineuse
+-- Néant : deux antennes terminées par une perle de la couleur d'accent
 function Toppers.Antennae(ctx: Ctx, shape: Shape)
 	local head = shape.Head
 	for _, side in { -1, 1 } do
 		local p, n = surface(head, Vector3.new(side * 0.35, 1, 0.05))
 		local up = (n + Vector3.new(side * 0.35, 0.2, 0)).Unit
-		cylinder(ctx, "Antenna", 1.0, 0.14, upright(p + up * 0.45, up), ctx.P.Limb)
-		accent(ctx, ball(ctx, "Antenna", 0.5, CFrame.new(p + up * 1.0), ctx.P.Accent, NEON))
+		cylinder(ctx, "Antenna", 1.0, 0.16, upright(p + up * 0.45, up), ctx.P.Limb)
+		accent(ctx, ball(ctx, "Antenna", 0.56, CFrame.new(p + up * 1.0), ctx.P.Accent))
 	end
 end
 
--- Glace : bonnet de neige + deux cristaux
+-- Glace : bonnet de neige + un cristal
 function Toppers.Snow(ctx: Ctx, shape: Shape)
 	local head = shape.Head
 	local top = headTop(shape)
@@ -1970,87 +1886,67 @@ function Toppers.Snow(ctx: Ctx, shape: Shape)
 		CFrame.new(top + Vector3.new(0, -0.08, 0.05)),
 		WHITE
 	)
-	for _, data in { { -0.32, 1.05, -0.35 }, { 0.32, 0.8, 0.4 } } do
-		accent(
+	accent(
+		ctx,
+		box(
 			ctx,
-			box(
-				ctx,
-				"Spike",
-				Vector3.new(0.42, data[2], 0.42),
-				CFrame.new(top + Vector3.new(data[1], data[2] * 0.42, 0.1)) * CFrame.Angles(0, math.rad(45), data[3]),
-				ctx.P.Accent,
-				GLASS
-			)
+			"Spike",
+			Vector3.new(0.46, 1.05, 0.46),
+			CFrame.new(top + Vector3.new(-0.3, 0.44, 0.1)) * CFrame.Angles(0, math.rad(45), -0.3),
+			ctx.P.Accent
 		)
-	end
+	)
 end
 
 -- Bonbon : chantilly + cerise
 function Toppers.Cream(ctx: Ctx, shape: Shape)
 	local top = headTop(shape) - Vector3.new(0, 0.12, 0)
-	ellipsoid(ctx, "Cream", Vector3.new(1.45, 0.62, 1.4), CFrame.new(top), WHITE)
-	ellipsoid(ctx, "Cream", Vector3.new(1.0, 0.55, 0.98), CFrame.new(top + Vector3.new(0, 0.38, 0)), WHITE)
-	ellipsoid(ctx, "Cream", Vector3.new(0.52, 0.52, 0.52), CFrame.new(top + Vector3.new(0, 0.72, 0)), WHITE)
-	ball(ctx, "Cherry", 0.62, CFrame.new(top + Vector3.new(0.05, 1.08, -0.05)), rgb(236, 18, 52), SMOOTH)
-	box(
-		ctx,
-		"Cherry",
-		Vector3.new(0.08, 0.55, 0.08),
-		CFrame.new(top + Vector3.new(0.15, 1.5, 0.05)) * CFrame.Angles(0, 0, -0.5),
-		rgb(60, 140, 40),
-		SMOOTH
-	)
+	ellipsoid(ctx, "Cream", Vector3.new(1.45, 0.66, 1.4), CFrame.new(top), WHITE)
+	ellipsoid(ctx, "Cream", Vector3.new(0.92, 0.62, 0.9), CFrame.new(top + Vector3.new(0, 0.42, 0)), WHITE)
+	ball(ctx, "Cherry", 0.62, CFrame.new(top + Vector3.new(0.05, 0.92, -0.05)), rgb(236, 30, 64), SMOOTH)
 end
 
--- Cyber : antenne + perle néon
+-- Cyber : antenne + perle de la couleur d'accent
 function Toppers.Antenna(ctx: Ctx, shape: Shape)
 	local top = headTop(shape)
-	cylinder(ctx, "Antenna", 1.1, 0.16, CFrame.new(top + Vector3.new(0, 0.45, 0.05)), STEEL, Enum.Material.Metal)
-	accent(ctx, ball(ctx, "Antenna", 0.52, CFrame.new(top + Vector3.new(0, 1.05, 0.05)), ctx.P.Accent, NEON))
+	cylinder(ctx, "Antenna", 1.1, 0.16, CFrame.new(top + Vector3.new(0, 0.45, 0.05)), STEEL)
+	accent(ctx, ball(ctx, "Antenna", 0.52, CFrame.new(top + Vector3.new(0, 1.05, 0.05)), ctx.P.Accent))
 end
 
--- Couronne dorée (Légendaire et plus) : coiffe de velours, bandeau à liseré clair, cinq
--- pointes triangulaires terminées par une petite perle d'or, une seule gemme (frontale,
--- taillée en losange) de la couleur de la rareté
+-- Couronne dorée (Légendaire et plus) : bandeau et cinq pointes d'or, une seule gemme
+-- frontale dès Mythique (couleur de la rareté, arc-en-ciel pour Secret)
 local function addCrown(ctx: Ctx, shape: Shape, rarity)
 	local head = shape.Head
-	local radius = math.min(head.R.X, head.R.Z, 1.3) * 0.7
-	local base = CFrame.new(headTop(shape) + Vector3.new(0, -0.2, 0.05)) * CFrame.Angles(0, 0, math.rad(-9))
-	local gemColor = if rarity.Tier == 4 then rgb(40, 200, 255) else rarity.Color
-	ellipsoid(
-		ctx,
-		"Crown",
-		Vector3.new(radius * 1.7, 0.9, radius * 1.7),
-		base * CFrame.new(0, 0.42, 0),
-		rgb(214, 24, 58)
-	)
-	cylinder(ctx, "Crown", 0.52, radius * 2, base * CFrame.new(0, 0.2, 0), GOLD, SMOOTH)
-	cylinder(ctx, "Crown", 0.1, radius * 2 + 0.08, base * CFrame.new(0, 0.47, 0), GOLD_LIGHT, SMOOTH)
+	local radius = math.min(head.R.X, head.R.Z, 1.3) * 0.68
+	local base = CFrame.new(headTop(shape) + Vector3.new(0, -0.2, 0.05)) * CFrame.Angles(0, 0, math.rad(-8))
+	cylinder(ctx, "Crown", 0.55, radius * 2, base * CFrame.new(0, 0.22, 0), GOLD, SMOOTH)
 	for i = 1, 5 do
 		local a = (i - 1) / 5 * math.pi * 2
 		local dir = Vector3.new(math.sin(a), 0, -math.cos(a))
-		local position = dir * radius * 0.84 + Vector3.new(0, 0.5, 0)
+		local position = dir * radius * 0.84 + Vector3.new(0, 0.52, 0)
 		-- Carré posé sur la pointe : le bas est caché dans le bandeau, reste un triangle
 		box(
 			ctx,
 			"Crown",
-			Vector3.new(0.6, 0.6, 0.22),
+			Vector3.new(0.62, 0.62, 0.22),
 			base * CFrame.new(position) * CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, math.rad(45)),
-			GOLD,
+			if i == 1 then GOLD else GOLD:Lerp(GOLD_DARK, 0.35),
 			SMOOTH
 		)
-		ball(ctx, "Crown", 0.16, base * CFrame.new(position + Vector3.new(0, 0.44, 0)), GOLD_LIGHT, SMOOTH)
 	end
-	local front = box(
-		ctx,
-		"Crown",
-		Vector3.new(0.34, 0.34, 0.16),
-		base * CFrame.new(0, 0.22, -radius - 0.03) * CFrame.Angles(0, 0, math.rad(45)),
-		gemColor,
-		NEON
-	)
-	if rarity.Rainbow then
-		rainbow(front, 0.1)
+	if rarity.Tier >= 5 then
+		local gem = box(
+			ctx,
+			"Crown",
+			Vector3.new(0.36, 0.36, 0.16),
+			base * CFrame.new(0, 0.24, -radius - 0.03) * CFrame.Angles(0, 0, math.rad(45)),
+			rarity.Color,
+			NEON
+		)
+		if rarity.Rainbow then
+			-- Départ sur le bleu : une gemme jaune disparaîtrait sur l'or
+			rainbow(gem, 0.58, 0.8)
+		end
 	end
 end
 
@@ -2072,21 +1968,21 @@ local function addParticles(
 	emitter.ZOffset = zOffset or 0
 	emitter.Color = color
 	-- Émission lumineuse partielle : des étincelles purement additives disparaissent sur le
-	-- sol blanc des bases et sur les socles
-	emitter.LightEmission = 0.35
+	-- sol clair des bases et sur les socles
+	emitter.LightEmission = 0.3
 	emitter.Rate = rate
-	emitter.Lifetime = NumberRange.new(0.8, 1.5)
-	emitter.Speed = NumberRange.new(1.2, 2.6)
+	emitter.Lifetime = NumberRange.new(1, 1.8)
+	emitter.Speed = NumberRange.new(0.6, 1.4)
 	emitter.SpreadAngle = Vector2.new(75, 75)
-	emitter.Acceleration = Vector3.new(0, 1.2, 0)
-	emitter.RotSpeed = NumberRange.new(-120, 120)
+	emitter.Acceleration = Vector3.new(0, 0.8, 0)
+	emitter.RotSpeed = NumberRange.new(-60, 60)
 	emitter.Size = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0),
-		NumberSequenceKeypoint.new(0.2, size),
+		NumberSequenceKeypoint.new(0.25, size),
 		NumberSequenceKeypoint.new(1, 0),
 	})
 	emitter.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.05),
+		NumberSequenceKeypoint.new(0, 0.1),
 		NumberSequenceKeypoint.new(1, 1),
 	})
 	emitter.Parent = root
@@ -2103,27 +1999,30 @@ local function addLight(root: BasePart, color: Color3, brightness: number, range
 	return light
 end
 
--- Disque de rareté au sol, lisible de loin : anneau néon de la couleur de la rareté et
--- disque intérieur plus clair (pièces opaques), jamais plus large que le socle d'une base.
--- Secret : anneau arc-en-ciel fin (teinte animée par CreatureAnimator)
+-- Anneau de rareté au sol : anneau néon fin de la couleur de la rareté, intérieur blanc
+-- comme le dessus des socles (sur un socle, on ne voit qu'un liseré lumineux), jamais plus
+-- large que le socle d'une base. Secret : anneau de douze arcs arc-en-ciel (teinte animée
+-- par CreatureAnimator ; toutes les couleurs restent visibles sur une capture)
 local function addRarityDisc(ctx: Ctx, rarity, hip: number, footprint: number)
 	local radius = math.min(footprint, SLOT_RADIUS / ctx.Scale)
-	local y = -hip + 0.08
+	local width = RING_WIDTH / ctx.Scale
+	local y = -hip + 0.07
 	if rarity.Rainbow then
-		local count = 16
-		local width = 0.34
+		local count = 12
+		-- Les coins extérieurs des arcs droits dépassent un peu le cercle : rayon réduit
+		local mid = (radius - width / 2) * 0.97
+		local length = mid * 2 * math.pi / count * 1.04
 		for i = 1, count do
 			local a = i / count * math.pi * 2
 			local segment = box(
 				ctx,
 				"RarityDisc",
-				Vector3.new(radius * 2 * math.pi / count * 1.08, 0.14, width),
-				CFrame.new(math.cos(a) * (radius - width / 2), y, math.sin(a) * (radius - width / 2))
-					* CFrame.Angles(0, -a - math.pi / 2, 0),
+				Vector3.new(length, 0.12, width),
+				CFrame.new(math.cos(a) * mid, y, math.sin(a) * mid) * CFrame.Angles(0, -a - math.pi / 2, 0),
 				WHITE,
 				NEON
 			)
-			rainbow(segment, i / count)
+			rainbow(segment, i / count, 0.75)
 		end
 		return
 	end
@@ -2132,10 +2031,10 @@ local function addRarityDisc(ctx: Ctx, rarity, hip: number, footprint: number)
 		ctx,
 		"RarityDisc",
 		0.13,
-		radius * 2 - 0.7,
-		CFrame.new(0, y + 0.015, 0),
-		rarity.Color:Lerp(WHITE, 0.5),
-		SMOOTH
+		radius * 2 - width * 2,
+		CFrame.new(0, y + 0.012, 0),
+		PEDESTAL_TOP,
+		Enum.Material.Plastic
 	)
 end
 
@@ -2143,22 +2042,20 @@ local function applyRarity(ctx: Ctx, rarity, shape: Shape, footprint: number)
 	if rarity.Tier >= 2 then
 		addRarityDisc(ctx, rarity, shape.Hip, footprint)
 	end
-	if rarity.Tier >= 4 then
+	if rarity.Tier >= 5 then
+		-- Quelques étincelles discrètes (Mythique : couleur de la rareté, Secret : arc-en-ciel)
 		local colors = if rarity.Rainbow
 			then sequence(Rarities.RainbowColors)
-			else ColorSequence.new(rarity.Color, rarity.Color:Lerp(WHITE, 0.5))
-		addParticles(ctx.Root, "Sparkles", colors, 5 + (rarity.Tier - 4) * 6, 0.58 * ctx.Scale, 1.7 * ctx.Scale)
-	end
-	if rarity.Tier >= 5 then
-		addLight(ctx.Root, if rarity.Rainbow then WHITE else rarity.Color, 1.4, 12 * ctx.Scale)
+			else ColorSequence.new(rarity.Color, rarity.Color:Lerp(WHITE, 0.6))
+		addParticles(ctx.Root, "Sparkles", colors, if rarity.Rainbow then 6 else 3, 0.5 * ctx.Scale, 1.7 * ctx.Scale)
 	end
 	if rarity.Rainbow then
-		-- Aura arc-en-ciel : huit petites étincelles en orbite autour du ventre (sous le
-		-- visage, dans la case du socle) et un nuage de particules arc-en-ciel tout autour
+		-- Aura Secrète : six petites étincelles arc-en-ciel en orbite autour du ventre (sous
+		-- le visage, dans la case du socle) et une lumière douce
 		local body = shape.Body
-		local radius = orbitRadius(ctx, math.max(body.R.X, body.R.Z) + 0.9, 0.15)
-		for i = 1, 8 do
-			local a = i / 8 * math.pi * 2
+		local radius = orbitRadius(ctx, math.max(body.R.X, body.R.Z) + 0.9, 0.17)
+		for i = 1, 6 do
+			local a = i / 6 * math.pi * 2
 			local orb = ball(
 				ctx,
 				"Orbit",
@@ -2167,116 +2064,64 @@ local function applyRarity(ctx: Ctx, rarity, shape: Shape, footprint: number)
 				WHITE,
 				NEON
 			)
-			rainbow(orb, i / 8)
+			rainbow(orb, i / 6, 0.75)
 		end
-		local aura = addParticles(
-			ctx.Root,
-			"RainbowAura",
-			sequence(Rarities.RainbowColors),
-			10,
-			0.5 * ctx.Scale,
-			1.7 * ctx.Scale
-		)
-		aura.SpreadAngle = Vector2.new(180, 180)
-		aura.Speed = NumberRange.new(0.5, 1)
-		aura.Lifetime = NumberRange.new(1.5, 2.5)
-		aura.Acceleration = Vector3.zero
+		addLight(ctx.Root, WHITE, 1, 10 * ctx.Scale)
 	end
 end
 
 local MutationEffects = {}
 
--- Éclair en zigzag (deux segments néon décalés, comme ⚡) partant de "base" le long de "dir"
-local function bolt(ctx: Ctx, base: Vector3, dir: Vector3, length: number, color: Color3)
-	local d = dir.Unit
-	local side = d:Cross(Vector3.zAxis)
-	if side.Magnitude < 1e-3 then
-		side = Vector3.xAxis
+-- Éclair ⚡ en trois barres (diagonale, petite marche, diagonale) dans le plan XY de
+-- "frame" (face à la caméra), hauteur ~2 x "size"
+local function bolt(ctx: Ctx, frame: CFrame, size: number, color: Color3)
+	local thick = 0.32 * size
+	local points = {
+		Vector3.new(0.32, 1.0, 0),
+		Vector3.new(-0.2, 0.06, 0),
+		Vector3.new(0.24, 0.06, 0),
+		Vector3.new(-0.3, -1.0, 0),
+	}
+	for i = 1, 3 do
+		local a, b = points[i] * size, points[i + 1] * size
+		local d = b - a
+		local part = box(
+			ctx,
+			"Spark",
+			Vector3.new(d.Magnitude + thick * 0.7, thick, thick * 0.8),
+			frame * CFrame.new((a + b) / 2) * CFrame.Angles(0, 0, math.atan2(d.Y, d.X)),
+			color,
+			SMOOTH
+		)
+		accent(ctx, part)
 	end
-	side = side.Unit
-	local segment = length * 0.55
-	local up = d + side * (0.32 / segment)
-	box(
-		ctx,
-		"Spark",
-		Vector3.new(0.26, segment, 0.26),
-		upright(base + d * length * 0.28 - side * 0.09, up),
-		color,
-		NEON
-	)
-	box(
-		ctx,
-		"Spark",
-		Vector3.new(0.26, segment, 0.26),
-		upright(base + d * length * 0.72 + side * 0.09, up),
-		color,
-		NEON
-	)
 end
 
--- Instable : yeux électriques (makePalette), couronne d'éclairs sur la tête, éclats
--- d'énergie en orbite
+-- Instable : deux éclairs jaunes qui jaillissent des côtés de la tête (couleurs de la
+-- créature conservées) ; les étincelles de particules font le reste
 function MutationEffects.Shards(ctx: Ctx, shape: Shape, mutation)
 	local head = shape.Head
-	for i = 1, 4 do
-		local azimuth = (i - 0.5) * math.pi / 2
-		local p, n = surface(head, Vector3.new(math.sin(azimuth) * 0.75, 0.7, -math.cos(azimuth) * 0.75))
-		bolt(ctx, p - n * 0.1, n + Vector3.yAxis * 0.8, 1.45, mutation.Accent)
-	end
-	local body = shape.Body
-	local radius = orbitRadius(ctx, math.max(body.R.X, body.R.Z) + 1.1, 0.52)
-	for i = 1, 3 do
-		local a = i / 3 * math.pi * 2 + 0.5
-		box(
-			ctx,
-			"Orbit",
-			Vector3.new(0.42, 0.84, 0.42),
-			CFrame.new(math.cos(a) * radius, orbitHeight(body, i, 0.3), math.sin(a) * radius)
-				* CFrame.Angles(a, a * 0.7, 0.6),
-			if i == 2 then mutation.Color else mutation.Accent,
-			NEON
-		)
+	for _, side in { -1, 1 } do
+		local p, n = surface(head, Vector3.new(side * 0.8, 0.7, 0.15))
+		local center = p + (n + Vector3.new(0, 0.7, 0)).Unit * 0.95
+		bolt(ctx, CFrame.new(center) * CFrame.Angles(0, 0, -side * 0.38), 1.05, mutation.Accent)
 	end
 end
 
--- Prismatique : le corps devient arc-en-ciel (paintRainbowBody) + gemmes arc-en-ciel en orbite
-function MutationEffects.Prism(ctx: Ctx, shape: Shape, _mutation)
-	local body = shape.Body
-	local radius = orbitRadius(ctx, math.max(body.R.X, body.R.Z) + 1.1, 0.52)
-	for i = 1, 3 do
-		local a = i / 3 * math.pi * 2 + 0.9
-		local gem = box(
-			ctx,
-			"Orbit",
-			Vector3.one * 0.6,
-			gemCFrame(Vector3.new(math.cos(a) * radius, orbitHeight(body, i, 0.3), math.sin(a) * radius)),
-			WHITE,
-			NEON
-		)
-		rainbow(gem, i / 3 + 0.05)
-	end
-end
+-- Prismatique : tout se passe dans paintRainbowBody (corps arc-en-ciel animé) et dans
+-- les étincelles arc-en-ciel ; pas de pièces en plus (des gemmes en orbite faisaient
+-- confettis)
+function MutationEffects.Prism(_ctx: Ctx, _shape: Shape, _mutation) end
 
--- Abyssal : bioluminescence des grands fonds. Corps bleu nuit (makePalette), yeux et taches
--- lumineuses cyan, leurre de baudroie au-dessus du front (sauf sous une couronne), aura
+-- Abyssal : bioluminescence des grands fonds. Corps bleu nuit (makePalette), taches
+-- lumineuses cyan sur les joues (addFace) et les flancs, leurre de baudroie au-dessus du
+-- front (sauf sous une couronne). Le néon fait ici l'effet : peu de pièces
 function MutationEffects.Abyss(ctx: Ctx, shape: Shape, mutation)
 	local body = shape.Body
-	local diameter = math.min(math.max(body.R.X, body.R.Y, body.R.Z) * 2 + 1.6, 2 * ORBIT_REACH / ctx.Scale)
-	local aura = ball(ctx, "MutationAura", diameter, CFrame.new(body.C), mutation.Color, Enum.Material.ForceField)
-	aura.Transparency = 0.15
-	aura.CastShadow = false
-	for i, dir in
-		{
-			Vector3.new(0.85, 0.35, -0.4),
-			Vector3.new(-0.85, 0.35, -0.4),
-			Vector3.new(0.75, -0.35, -0.6),
-			Vector3.new(-0.75, -0.35, -0.6),
-		}
-	do
-		local size = if i <= 2 then 0.38 else 0.3
+	for _, dir in { Vector3.new(0.85, 0.3, -0.35), Vector3.new(-0.85, 0.3, -0.35) } do
 		accent(
 			ctx,
-			ellipsoid(ctx, "Spot", Vector3.new(size, size, 0.14), onSurface(body, dir, 0.03), mutation.Accent, NEON)
+			ellipsoid(ctx, "Spot", Vector3.new(0.4, 0.4, 0.14), onSurface(body, dir, 0.03), mutation.Accent, NEON)
 		)
 	end
 	if not ctx.Crowned then
@@ -2289,7 +2134,7 @@ function MutationEffects.Abyss(ctx: Ctx, shape: Shape, mutation)
 			ellipsoid(
 				ctx,
 				"Lure",
-				Vector3.new(0.15, 0.15, length + 0.12),
+				Vector3.new(0.16, 0.16, length + 0.12),
 				lookAt(span[1], span[2]) * CFrame.new(0, 0, -length / 2),
 				ctx.P.Limb
 			)
@@ -2298,21 +2143,21 @@ function MutationEffects.Abyss(ctx: Ctx, shape: Shape, mutation)
 	end
 end
 
--- Céleste : statue d'or (makePalette), auréole dorée au-dessus de la couronne ou de
--- l'accessoire, ailes d'ange
+-- Céleste : statue d'or (makePalette), auréole lumineuse au-dessus de la couronne ou de
+-- l'accessoire, ailes d'ange blanches
 function MutationEffects.Halo(ctx: Ctx, shape: Shape, mutation)
 	local head = shape.Head
 	local top = headTop(shape)
 	local y = math.max(top.Y + (if ctx.Crowned then 1.2 else 0.65), (shape.HatTop or -math.huge) + 0.35)
 	local center = Vector3.new(top.X, y, top.Z + 0.1)
-	local radius = math.min(head.R.X, head.R.Z) * 0.62
-	local count = 12
+	local radius = math.min(head.R.X, head.R.Z) * 0.6
+	local count = 8
 	for i = 1, count do
 		local a = i / count * math.pi * 2
 		box(
 			ctx,
 			"Halo",
-			Vector3.new(radius * 2 * math.pi / count * 1.12, 0.16, 0.2),
+			Vector3.new(radius * 2 * math.pi / count * 1.1, 0.18, 0.22),
 			CFrame.new(center + Vector3.new(math.cos(a) * radius, 0, math.sin(a) * radius))
 				* CFrame.Angles(0, -a - math.pi / 2, 0),
 			mutation.Accent,
@@ -2343,30 +2188,30 @@ local function applyMutation(ctx: Ctx, shape: Shape?, mutationId: string)
 	local colors = if mutation.GradientColors
 		then sequence(mutation.GradientColors)
 		else ColorSequence.new(mutation.Color, mutation.Accent)
-	addParticles(ctx.Root, "Aura", colors, 6 + mutation.Multiplier * 2, 0.4 * ctx.Scale, 1.7 * ctx.Scale)
-	-- Une seule lumière par créature : celle de la rareté (Mythique+) prend la couleur de la mutation
+	addParticles(ctx.Root, "Aura", colors, 2 + mutation.Multiplier, 0.4 * ctx.Scale, 1.7 * ctx.Scale)
+	-- Une seule lumière par créature : celle de la rareté (Secret) prend la couleur de la mutation
 	local light = ctx.Root:FindFirstChildOfClass("PointLight")
 	if light then
 		light.Color = mutation.Color
 		light.Brightness = math.max(light.Brightness, mutation.LightBrightness)
 	else
-		addLight(ctx.Root, mutation.Color, mutation.LightBrightness, 10 * ctx.Scale)
+		addLight(ctx.Root, mutation.Color, mutation.LightBrightness, 8 * ctx.Scale)
 	end
 end
 
 ---------------------------------------------------------------------------
--- Billboard d'informations (texte seul, style « Steal a ... »)
+-- Étiquette d'informations (texte seul, docs/ART_DIRECTION.md section 4)
 ---------------------------------------------------------------------------
 -- Étiquette au-dessus de la créature, de haut en bas :
---   [MUTATION xN]  (si mutée)            Luckiest Guy, dégradé de la mutation
---   Nom                                   Fredoka One, blanc
---   RARETÉ                                Luckiest Guy, dégradé de la rareté (arc-en-ciel pour Secret)
---   $X/s                                  Luckiest Guy (« /s » en Fredoka One), jaune-or
---   $Prix  (seulement sur le tapis)       Luckiest Guy, vert vif
--- Taille mixte : une part en studs (l'étiquette rétrécit avec la distance comme un objet
--- du monde) + un plancher en pixels (LABEL_FLOOR par stud : le texte reste lisible de loin
--- et sur téléphone). TextScaled remplit chaque ligne, UITextSizeConstraint évite les
--- lettres géantes de près, le contour noir garde le texte lisible sur n'importe quel fond.
+--   Mutation xN   (si mutée)            Fredoka One, dégradé de la mutation
+--   Nom                                 Fredoka One, blanc
+--   RARETÉ                              Luckiest Guy, dégradé de la rareté (arc-en-ciel pour Secret)
+--   $X/s                                Luckiest Guy (« /s » en Fredoka One), or
+--   $Prix  (seulement sur le tapis)     Luckiest Guy, vert
+-- Contours encre bleu nuit (jamais noirs). Taille mixte : une part en studs (l'étiquette
+-- rétrécit avec la distance comme un objet du monde) + un plancher en pixels (LABEL_FLOOR
+-- par stud : le texte reste lisible de loin et sur téléphone). TextScaled remplit chaque
+-- ligne, UITextSizeConstraint évite les lettres géantes de près.
 --
 -- Luckiest Guy n'a que des capitales, collées en haut de la ligne (le bas reste vide), et
 -- ses accents (É) dépassent de 0,27 em au-dessus. Chaque ligne Luckiest Guy réserve donc
@@ -2376,53 +2221,57 @@ end
 local LABEL_WIDTH = 9 -- studs
 -- Pixels ajoutés par stud (plancher de taille) : plus généreux sur le tapis (on repère les
 -- bonnes affaires de loin), discret dans les bases (rangées serrées)
-local LABEL_FLOOR = { Carpet = 12, Base = 6 }
+local LABEL_FLOOR = { Carpet = 12, Base = 7 }
 -- Distance d'affichage : le tapis se surveille depuis sa base ; dans une base, un voleur
 -- lit les rangées du fond depuis le trottoir (de loin, CreatureAnimator ne garde que la
 -- rareté et le revenu : pas de mur de texte)
 local LABEL_MAX_DISTANCE = { Carpet = 90, Base = 80 }
 local LG_TOP = 0.23
 -- Taille des lettres de chaque ligne (unités de hauteur d'étiquette)
-local GLYPH = { Mutation = 0.7, Name = 0.8, Rarity = 0.76, Income = 0.7, Price = 0.88 }
+local GLYPH = { Mutation = 0.72, Name = 0.8, Rarity = 0.72, Income = 0.7, Price = 0.86 }
 -- Taille de police maximale (pixels) : plus petite dans les bases, où les étiquettes
 -- s'empilent
 local MAX_TEXT_SIZE = {
-	Carpet = { Mutation = 44, Name = 54, Rarity = 50, Income = 46, Price = 58 },
-	Base = { Mutation = 28, Name = 35, Rarity = 32, Income = 30, Price = 36 },
+	Carpet = { Mutation = 44, Name = 52, Rarity = 46, Income = 44, Price = 54 },
+	Base = { Mutation = 30, Name = 34, Rarity = 30, Income = 29, Price = 34 },
 }
 local LINE_GAP = 3 -- pixels entre deux lignes
-local STROKE = 2.5 -- contour noir (pixels)
-local INCOME_COLOR = rgb(255, 215, 40)
-local PRICE_COLOR = rgb(80, 255, 90)
+local STROKE = { Carpet = 2.5, Base = 2 } -- contour encre (pixels)
+local INCOME_COLOR = rgb(255, 201, 60) -- jeton « Récompense » (revenus/s)
+local PRICE_COLOR = rgb(47, 203, 85) -- jeton « Action / argent »
 local LUCKIEST = Enum.Font.LuckiestGuy
 local FREDOKA = Enum.Font.FredokaOne
 
--- Dégradé vertical vif posé sur les capitales d'une ligne Luckiest Guy (bande LG_TOP..0,77
--- de la ligne) : clair en haut, couleur franche au milieu, un peu plus sombre en bas
-local function verticalGradient(color: Color3): ColorSequence
+-- Dégradé vertical posé sur les lettres d'une ligne : clair en haut, couleur franche au
+-- milieu, un peu plus soutenu en bas. "band" : part de la ligne occupée par les lettres
+-- (Luckiest Guy : sous la marge LG_TOP)
+local function verticalGradient(color: Color3, top: number): ColorSequence
+	local span = 1 - top
 	return ColorSequence.new({
-		ColorSequenceKeypoint.new(0, color:Lerp(WHITE, 0.3)),
-		ColorSequenceKeypoint.new(0.3, color:Lerp(WHITE, 0.25)),
-		ColorSequenceKeypoint.new(0.55, color),
-		ColorSequenceKeypoint.new(0.78, color:Lerp(INK, 0.14)),
-		ColorSequenceKeypoint.new(1, color:Lerp(INK, 0.14)),
+		ColorSequenceKeypoint.new(0, color:Lerp(WHITE, 0.35)),
+		ColorSequenceKeypoint.new(top + span * 0.12, color:Lerp(WHITE, 0.3)),
+		ColorSequenceKeypoint.new(top + span * 0.45, color),
+		ColorSequenceKeypoint.new(top + span * 0.8, color:Lerp(INK, 0.12)),
+		ColorSequenceKeypoint.new(1, color:Lerp(INK, 0.12)),
 	})
 end
 
--- Largeur approchée d'un texte en Luckiest Guy (em) : capitales et chiffres ~0,59 em,
--- espace 0,2 (les octets de continuation UTF-8 ne comptent pas : É = un caractère)
-local function luckiestWidth(text: string): number
+-- Largeur approchée d'un texte (em) : capitales et chiffres de Luckiest Guy ~0,59 em,
+-- lettres de Fredoka One ~0,55 em, espace 0,22 (les octets de continuation UTF-8 ne
+-- comptent pas : É = un caractère)
+local function textWidth(text: string, font: Enum.Font): number
 	local chars = #(string.gsub(text, "[\128-\191]", ""))
 	local _, spaces = string.gsub(text, " ", "")
-	return (chars - spaces) * 0.59 + spaces * 0.2
+	local em = if font == LUCKIEST then 0.59 else 0.55
+	return (chars - spaces) * em + spaces * 0.22
 end
 
 -- Dégradé horizontal (arc-en-ciel) resserré sur le texte. Un UIGradient s'étale sur toute
 -- la largeur de l'étiquette (9 studs) : sur un mot court comme SECRET, seules les couleurs
 -- du milieu toucheraient les lettres. La taille du texte suit la hauteur de sa ligne, donc
 -- la part de largeur qu'il occupe est à peu près constante.
-local function spanGradient(colors: { Color3 }, text: string, glyph: number): ColorSequence
-	local span = math.clamp(luckiestWidth(text) * glyph / LABEL_WIDTH, 0.15, 1)
+local function spanGradient(colors: { Color3 }, text: string, font: Enum.Font, glyph: number): ColorSequence
+	local span = math.clamp(textWidth(text, font) * glyph / LABEL_WIDTH, 0.15, 1)
 	local first = 0.5 - span / 2
 	local keypoints = { ColorSequenceKeypoint.new(0, colors[1]) }
 	for i, color in colors do
@@ -2439,7 +2288,8 @@ type LabelLine = {
 	Name: string,
 	Font: Enum.Font,
 	Text: string,
-	Gradient: ColorSequence,
+	Color: Color3?, -- couleur unie (sans dégradé)
+	Gradient: ColorSequence?,
 	Horizontal: boolean?, -- dégradé de gauche à droite (arc-en-ciel)
 	Rich: boolean?, -- texte riche (« /s » du revenu)
 }
@@ -2449,7 +2299,15 @@ local function lineHeight(info: LabelLine): number
 	return if info.Font == LUCKIEST then GLYPH[info.Name] / (1 - LG_TOP) else GLYPH[info.Name]
 end
 
-local function addLine(gui: BillboardGui, info: LabelLine, order: number, share: number, gaps: number, maxSize: number)
+local function addLine(
+	gui: BillboardGui,
+	info: LabelLine,
+	order: number,
+	share: number,
+	gaps: number,
+	maxSize: number,
+	stroke: number
+)
 	local label = Instance.new("TextLabel")
 	label.Name = info.Name
 	label.LayoutOrder = order
@@ -2459,7 +2317,7 @@ local function addLine(gui: BillboardGui, info: LabelLine, order: number, share:
 	label.Font = info.Font
 	label.RichText = info.Rich == true
 	label.Text = info.Text
-	label.TextColor3 = WHITE -- le dégradé teinte le blanc
+	label.TextColor3 = info.Color or WHITE -- un dégradé teinte le blanc
 	label.TextScaled = true
 	label.TextWrapped = false
 	if info.Font == LUCKIEST then
@@ -2470,15 +2328,17 @@ local function addLine(gui: BillboardGui, info: LabelLine, order: number, share:
 	local limit = Instance.new("UITextSizeConstraint")
 	limit.MaxTextSize = maxSize
 	limit.Parent = label
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = INK
-	stroke.Thickness = STROKE
-	stroke.LineJoinMode = Enum.LineJoinMode.Round
-	stroke.Parent = label
-	local tint = Instance.new("UIGradient")
-	tint.Color = info.Gradient
-	tint.Rotation = if info.Horizontal then 0 else 90
-	tint.Parent = label
+	local outline = Instance.new("UIStroke")
+	outline.Color = INK
+	outline.Thickness = stroke
+	outline.LineJoinMode = Enum.LineJoinMode.Round
+	outline.Parent = label
+	if info.Gradient then
+		local tint = Instance.new("UIGradient")
+		tint.Color = info.Gradient
+		tint.Rotation = if info.Horizontal then 0 else 90
+		tint.Parent = label
+	end
 	label.Parent = gui
 end
 
@@ -2495,18 +2355,19 @@ function CreatureVisuals.CreateBillboard(
 
 	local lines: { LabelLine } = {}
 	if mutation then
-		local text = string.format("%s X%d", Format.Upper(mutation.Name), mutation.Multiplier)
+		-- Casse normale en Fredoka One (« Céleste x5 »), comme le reste de l'interface
+		local text = string.format("%s x%d", mutation.Name, mutation.Multiplier)
 		table.insert(lines, {
 			Name = "Mutation",
-			Font = LUCKIEST,
+			Font = FREDOKA,
 			Text = text,
 			Gradient = if mutation.GradientColors
-				then spanGradient(mutation.GradientColors, text, GLYPH.Mutation)
-				else verticalGradient(mutation.Color),
+				then spanGradient(mutation.GradientColors, text, FREDOKA, GLYPH.Mutation)
+				else verticalGradient(mutation.Color, 0),
 			Horizontal = mutation.GradientColors ~= nil,
 		})
 	end
-	table.insert(lines, { Name = "Name", Font = FREDOKA, Text = def.Name, Gradient = ColorSequence.new(WHITE) })
+	table.insert(lines, { Name = "Name", Font = FREDOKA, Text = def.Name, Color = WHITE })
 	local rainbowRarity = rarity ~= nil and rarity.Rainbow == true
 	local rarityText = Format.Upper(if rarity then rarity.Name else tostring(def.Rarity))
 	table.insert(lines, {
@@ -2514,8 +2375,8 @@ function CreatureVisuals.CreateBillboard(
 		Font = LUCKIEST,
 		Text = rarityText,
 		Gradient = if rainbowRarity
-			then spanGradient(Rarities.RainbowColors, rarityText, GLYPH.Rarity)
-			else verticalGradient(if rarity then rarity.Color else WHITE),
+			then spanGradient(Rarities.RainbowColors, rarityText, LUCKIEST, GLYPH.Rarity)
+			else verticalGradient(if rarity then rarity.Color else WHITE, LG_TOP),
 		Horizontal = rainbowRarity,
 	})
 	-- « /s » en minuscules de Fredoka One (Luckiest Guy n'a que des capitales : « /S »)
@@ -2524,13 +2385,13 @@ function CreatureVisuals.CreateBillboard(
 		Name = "Income",
 		Font = LUCKIEST,
 		Text = (string.gsub(income, "/s$", '<font face="FredokaOne">/s</font>')),
-		Gradient = verticalGradient(INCOME_COLOR),
+		Gradient = verticalGradient(INCOME_COLOR, LG_TOP),
 		Rich = true,
 	})
 	if priceText then
 		table.insert(
 			lines,
-			{ Name = "Price", Font = LUCKIEST, Text = priceText, Gradient = verticalGradient(PRICE_COLOR) }
+			{ Name = "Price", Font = LUCKIEST, Text = priceText, Gradient = verticalGradient(PRICE_COLOR, LG_TOP) }
 		)
 	end
 
@@ -2563,7 +2424,7 @@ function CreatureVisuals.CreateBillboard(
 	layout.Parent = gui
 
 	for order, info in lines do
-		addLine(gui, info, order, lineHeight(info) / total, gaps, MAX_TEXT_SIZE[place][info.Name])
+		addLine(gui, info, order, lineHeight(info) / total, gaps, MAX_TEXT_SIZE[place][info.Name], STROKE[place])
 	end
 
 	gui.Parent = root
@@ -2636,25 +2497,17 @@ local function makePalette(def, style: Style, traits: Traits, mutation): Palette
 	local over = traits.Palette or {}
 	local hue = hashId(def.Id)
 	local palette: Palette = {
-		Body = over.Body or style.Body:Lerp(style.Limb, hue * 0.2),
+		Body = over.Body or style.Body:Lerp(style.Limb, hue * 0.18),
 		Belly = over.Belly or style.Belly,
 		Limb = over.Limb or style.Limb:Lerp(style.Body, hue * 0.2),
 		Accent = over.Accent or style.Accent,
-		Accent2 = over.Accent2 or style.Accent2,
-		Pupil = style.Pupil,
-		Sclera = WHITE,
-		PupilMaterial = SMOOTH,
+		Pupil = INK,
 		Material = SMOOTH,
-		AccentMaterial = if style.Glow then NEON else SMOOTH,
 	}
-	if traits.GlowEyes then
-		palette.Sclera = rgb(30, 10, 60)
-		palette.Pupil = palette.Accent
-		palette.PupilMaterial = NEON
-	end
 	if mutation then
 		-- Les couleurs de la mutation remplacent (en grande partie) celles de la créature :
-		-- un mélange RVB de teintes opposées donnerait du gris
+		-- un mélange RVB de teintes opposées donnerait du gris. L'accent devient celui de la
+		-- mutation (toujours en plastique plein)
 		local mix = mutation.Mix
 		if mutation.Body then
 			palette.Body = palette.Body:Lerp(mutation.Body, mix)
@@ -2666,18 +2519,6 @@ local function makePalette(def, style: Style, traits: Traits, mutation): Palette
 			palette.Limb = palette.Limb:Lerp(mutation.Limb, mix)
 		end
 		palette.Accent = mutation.Accent
-		palette.Accent2 = mutation.Color
-		palette.AccentMaterial = NEON
-		if mutation.Effect == "Abyss" then
-			-- Yeux luisants des grands fonds
-			palette.Sclera = rgb(8, 14, 30)
-			palette.Pupil = mutation.Accent
-			palette.PupilMaterial = NEON
-		elseif mutation.Effect == "Shards" then
-			-- Yeux électriques : pupilles néon (la mutation se repère de loin)
-			palette.Pupil = mutation.Color
-			palette.PupilMaterial = NEON
-		end
 	end
 	return palette
 end
@@ -2694,6 +2535,7 @@ local KEEP_COLORS = {
 	Brow = true,
 	Visor = true,
 	Nose = true,
+	Core = true,
 	Crown = true,
 	Halo = true,
 	RarityDisc = true,
@@ -2710,9 +2552,9 @@ local function paintRainbowBody(ctx: Ctx)
 			and not ctx.SkinOf[part]
 		then
 			-- Teinte selon la hauteur (bien étalée : même immobile, la créature est
-			-- multicolore), couleurs franches ; le ventre reste plus clair pour le relief
-			local hue = (0.5 + part.CFrame.Position.Y / ctx.Scale * 0.34) % 1
-			part.Color = Color3.fromHSV(hue, if part.Name == "Belly" then 0.5 else 0.9, 1)
+			-- multicolore), couleurs vives mais pas criardes ; le ventre reste plus clair
+			local hue = (0.5 + part.CFrame.Position.Y / ctx.Scale * 0.3) % 1
+			part.Color = Color3.fromHSV(hue, if part.Name == "Belly" then 0.35 else 0.68, 1)
 			part:SetAttribute("Rainbow", hue)
 		end
 	end
@@ -2736,7 +2578,7 @@ local function topOf(model: Model, root: BasePart): number
 end
 
 -- Facteur (<= 1) qui fait tenir le corps dans sa case de base (SLOT_HALF_WIDTH x
--- SLOT_HALF_DEPTH autour du centre). Disque de rareté, orbites et aura sont déjà bornés
+-- SLOT_HALF_DEPTH autour du centre). Anneau de rareté, orbites et aura sont déjà bornés
 -- en studs et ne comptent pas.
 local FIT_IGNORE = { Root = true, RarityDisc = true, Orbit = true, MutationAura = true }
 
@@ -2762,9 +2604,6 @@ local function buildProcedural(
 	scale: number
 )
 	local traits = TRAITS[def.Id] or NO_TRAITS
-	-- L'archétype est utile aux traits (3e œil) : copie locale enrichie
-	local localTraits: Traits = table.clone(traits)
-	localTraits.Archetype = def.Visual.Archetype
 	local mutation = Mutations.Get(mutationId)
 	local ctx: Ctx = {
 		Model = model,
@@ -2772,7 +2611,7 @@ local function buildProcedural(
 		Scale = scale,
 		P = makePalette(def, style, traits, mutation),
 		Style = style,
-		Traits = localTraits,
+		Traits = traits,
 		Accents = {},
 		RainbowAccents = mutation ~= nil and mutation.Effect == "Prism",
 		Blush = style.Blush and not (mutation ~= nil and mutation.Effect == "Abyss"),
@@ -2809,8 +2648,7 @@ local function buildProcedural(
 			"Helmet",
 			"Fur",
 			"Clouds",
-			"Sprinkles",
-			"Glitch",
+			"Scarf",
 			"Ring",
 			"OrbitCrystals",
 			"Shards",
@@ -2822,11 +2660,12 @@ local function buildProcedural(
 			Features[feature](ctx, shape)
 		end
 	end
-	if traits.Scarf then
-		Features.Scarf(ctx, shape, traits.Scarf)
-	end
 	if traits.Cape then
-		Features.Cape(ctx, shape, traits.Cape)
+		-- Cape de couleur imposée (archonte) : celle des membres si une mutation recolore
+		-- la créature (une cape violette sur une statue d'or jurait)
+		local recolored = mutation ~= nil and mutation.Limb ~= nil
+		local color = if typeof(traits.Cape) == "Color3" then traits.Cape else nil
+		Features.Cape(ctx, shape, if recolored and color then ctx.P.Limb else color)
 	end
 	if traits.Staff then
 		Features.Staff(ctx, shape, traits.Staff)
