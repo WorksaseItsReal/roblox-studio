@@ -61,17 +61,21 @@ côté, boutons Rebirth / Index / Boutique à gauche, verrou de base minuté.
 - **Cartes** : fond clair, texte foncé, prix en vert, raretés en pastille colorée.
 - **Espacement** : grille de 8 px, marges internes 16–20 px.
 
-### HUD (écran de référence 1280×760)
-- **Haut gauche** : argent (icône + `$1.23M` en Luckiest Guy, contour encre) et
-  `+$4.32K/s` (or, Fredoka) dessous. Pas de cadre.
-- **Haut centre** : une seule pilule d'événement sombre semi-transparente
-  (`🔥 Lave · 3:07`, puis `🌪️ 7:11` si la tempête approche).
-- **Gauche** : grille 2×3 de **tuiles identiques** 72×72 (fond blanc, contour encre 3 px,
-  emoji 34, libellé Fredoka 14 blanc à contour encre sous la tuile) : Boutique, Créatures,
-  Index, Quêtes, Rebirth, Plus. **Plus** ouvre un tiroir (grille) : Fusion, Base, Portail,
-  Classement, Cadeaux, Récompense du jour, Codes, Inviter. Pastille rouge « ! » sur la
-  tuile concernée (ou sur Plus) quand quelque chose est réclamable.
-- **Droite** : rien en permanence ; une bulle or « 🎁 Cadeau prêt ! » seulement quand un
+### HUD (écran de référence 1280×760) : disposition « Grow a Garden »
+- **Haut centre** : 3 gros boutons identiques (icône ronde blanche + libellé) :
+  **Rift** (téléporte sur l'esplanade devant la Rift), **Ma base** (téléporte dans sa
+  base), **Boutique** (ouvre la boutique). Téléportations validées par le serveur
+  (refusées en portant une créature volée, recharge de 5 s). C'est l'équivalent des
+  boutons « Seeds / Garden / Sell » de *Grow a Garden*.
+- Juste dessous : une petite pilule d'événement sombre (`🔥 Lave 3:07 | 🌪️ 7:11`).
+- **Haut gauche** : tuile **Sac** (créatures).
+- **Gauche** : colonne de tuiles blanches identiques : Index, Quêtes, Rebirth, **Plus**
+  (tiroir : Fusion, Améliorer, Portail, Classement, Cadeaux, Quotidien, Codes, Inviter).
+  Pastille rouge « ! » sur la tuile concernée (ou sur Plus) quand c'est réclamable.
+- **Bas gauche** : l'argent en gros (`$1.23M`, Luckiest Guy vert, contour encre) et
+  `+$4.32K/s` dessous. Sur écran tactile, il passe à côté du Sac (le bas gauche est la
+  zone du joystick de Roblox).
+- **Droite** : rien en permanence ; bulle or « 🎁 Cadeau prêt ! » seulement quand un
   cadeau est réclamable.
 - **Bas centre** : uniquement contextuel (barrière quand le joueur est dans sa base,
   bandeau de vol pendant un vol, vengeance quand disponible).
