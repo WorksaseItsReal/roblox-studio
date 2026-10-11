@@ -29,22 +29,25 @@ type PlotRecord = any
 
 local plotByPlayer: { [Player]: PlotRecord } = {}
 
-local LOCKED_SLOT_COLOR = Color3.fromRGB(70, 68, 84)
-
 local function getPlotColor(plot: PlotRecord): Color3
 	local color = plot.Model:GetAttribute("PlotColor")
 	return if typeof(color) == "Color3" then color else plot.Barrier.Color
 end
 
--- Socle débloqué : clair avec anneau lumineux ; verrouillé : sombre et translucide
-local UNLOCKED_SLOT_COLOR = Color3.fromRGB(236, 234, 246)
+-- Socle débloqué : blanc, anneau néon couleur d'équipe. Verrouillé : le socle reste
+-- clair (gris perle) et seul l'anneau passe en gris foncé mat : la base reste propre
+-- même quand presque tout est verrouillé (mêmes valeurs que MapBuilder)
+local UNLOCKED_SLOT_COLOR = Color3.fromRGB(250, 250, 255)
+local LOCKED_SLOT_COLOR = Color3.fromRGB(217, 219, 230)
+local LOCKED_RING_COLOR = Color3.fromRGB(78, 80, 94)
 local function setSlotLook(slot: BasePart, unlocked: boolean, color: Color3)
 	slot.Color = if unlocked then UNLOCKED_SLOT_COLOR else LOCKED_SLOT_COLOR
-	slot.Transparency = if unlocked then 0 else 0.5
+	slot.Transparency = 0
 	local ring = slot:FindFirstChild("SlotRing")
 	if ring and ring:IsA("BasePart") then
-		ring.Color = color
-		ring.Transparency = if unlocked then 0 else 1
+		ring.Color = if unlocked then color else LOCKED_RING_COLOR
+		ring.Material = if unlocked then Enum.Material.Neon else Enum.Material.SmoothPlastic
+		ring.Transparency = 0
 	end
 end
 

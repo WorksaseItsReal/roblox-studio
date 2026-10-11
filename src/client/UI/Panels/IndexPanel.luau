@@ -23,7 +23,7 @@ IndexPanel.Color = "Teal"
 
 local TIERS = {
 	{ Id = "Complete", Name = "Collection complète", Icon = "🏅" },
-	{ Id = "Perfect", Name = "Parfait (avec Secrète)", Icon = "👑" },
+	{ Id = "Perfect", Name = "Parfait (+ Secrète)", Icon = "👑" },
 }
 
 function IndexPanel.Create(content: Frame, ctx)
@@ -31,7 +31,7 @@ function IndexPanel.Create(content: Frame, ctx)
 	local self = {} :: any
 
 	-- Onglets de dimension
-	local tabs = Widgets.Row({ Size = UDim2.new(1, 0, 0, 52), Parent = content }, 8)
+	local tabs = Widgets.Row({ Size = UDim2.new(1, 0, 0, 48), Parent = content }, 8)
 	local tabButtons = {}
 	for order, dimensionId in Dimensions.Order do
 		local dimension = Dimensions.Get(dimensionId)
@@ -40,8 +40,8 @@ function IndexPanel.Create(content: Frame, ctx)
 				then dimension.Name
 				else dimensionId),
 			Color = "Dark",
-			TextSize = 17,
-			Size = UDim2.new(0.2, -7, 0, 50),
+			TextSize = 19,
+			Size = UDim2.new(0.2, -7, 0, 46),
 			LayoutOrder = order,
 			Parent = tabs,
 			OnClick = function()
@@ -52,15 +52,15 @@ function IndexPanel.Create(content: Frame, ctx)
 	end
 
 	local progress = UIKit.ProgressBar(
-		{ Position = UDim2.fromOffset(0, 62), Size = UDim2.new(1, 0, 0, 30), Parent = content },
-		Color3.fromRGB(80, 220, 180)
+		{ Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 0, 28), Parent = content },
+		Color3.fromRGB(40, 220, 120)
 	)
 
 	-- Récompenses
 	local rewardRow = UIKit.New("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 102),
-		Size = UDim2.new(1, 0, 0, 64),
+		Position = UDim2.fromOffset(0, 92),
+		Size = UDim2.new(1, 0, 0, 60),
 		Parent = content,
 	})
 	local rewards = {}
@@ -70,13 +70,20 @@ function IndexPanel.Create(content: Frame, ctx)
 			Position = UDim2.new((i - 1) * 0.5, if i == 2 then 6 else 0, 0, 0),
 			Size = UDim2.new(0.5, -6, 1, 0),
 			Parent = rewardRow,
-		}, Theme.Gold, 0.25)
+		})
+		UIKit.IconTile(tier.Icon, Theme.Gold, 44, {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 8, 0.5, 0),
+			Parent = card,
+		})
 		UIKit.Text({
-			Text = tier.Icon .. " " .. tier.Name,
-			TextSize = 16,
+			Text = tier.Name,
+			TextSize = 17,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(12, 6),
-			Size = UDim2.new(1, -140, 0, 24),
+			Position = UDim2.fromOffset(60, 5),
+			Size = UDim2.new(1, -196, 0, 24),
+			Stroke = 2.2,
+			Fit = true,
 			Parent = card,
 		})
 		UIKit.Text({
@@ -85,20 +92,22 @@ function IndexPanel.Create(content: Frame, ctx)
 				Format.Money(reward.Money),
 				math.round(reward.IncomeBonus * 100)
 			),
-			TextSize = 15,
+			TextSize = 16,
 			TextColor3 = Theme.Money,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(12, 32),
-			Size = UDim2.new(1, -140, 0, 22),
+			Position = UDim2.fromOffset(60, 29),
+			Size = UDim2.new(1, -196, 0, 22),
+			Stroke = 2.2,
+			Fit = true,
 			Parent = card,
 		})
 		rewards[tier.Id] = UIKit.Button({
-			Text = "Réclamer",
+			Text = "RÉCLAMER",
 			Color = "Gold",
-			TextSize = 16,
+			TextSize = 17,
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -10, 0.5, 0),
-			Size = UDim2.fromOffset(118, 46),
+			Position = UDim2.new(1, -8, 0.5, 0),
+			Size = UDim2.fromOffset(124, 44),
 			ZIndex = 2,
 			Parent = card,
 			OnClick = function()
@@ -107,9 +116,9 @@ function IndexPanel.Create(content: Frame, ctx)
 		})
 	end
 
-	local grid = UIKit.ScrollGrid(content, UDim2.new(0.25, -9, 0, 122), {
-		Position = UDim2.fromOffset(0, 174),
-		Size = UDim2.new(1, 0, 1, -174),
+	local grid = UIKit.ScrollGrid(content, UDim2.new(0.25, -9, 0, 132), {
+		Position = UDim2.fromOffset(0, 158),
+		Size = UDim2.new(1, 0, 1, -158),
 	})
 
 	local function isComplete(profile, tier: string): boolean
@@ -148,7 +157,7 @@ function IndexPanel.Create(content: Frame, ctx)
 		for _, tier in TIERS do
 			local claimed = profile.IndexClaimed[selected .. ":" .. tier.Id]
 			local button = rewards[tier.Id]
-			button:SetText(if claimed then "✅ Reçu" else "Réclamer")
+			button:SetText(if claimed then "✅ REÇU" else "RÉCLAMER")
 			button:SetEnabled(not claimed and isComplete(profile, tier.Id))
 		end
 
@@ -160,52 +169,57 @@ function IndexPanel.Create(content: Frame, ctx)
 			return (ra and ra.Tier or 0) < (rb and rb.Tier or 0)
 		end)
 		for order, def in sorted do
-			local rarity = Rarities.Get(def.Rarity)
-			local color = if rarity then rarity.Color else Theme.Text
 			local known = profile.Index[def.Id] == true
+			-- Inconnue : silhouette sombre "???" (la rareté reste visible)
 			local card = UIKit.Card(
 				{ LayoutOrder = order, Parent = grid },
-				if known then color else Theme.Inset,
-				if known then 0.45 else 0.6
+				if known then nil else Color3.fromRGB(12, 30, 86),
+				if known then nil else 0.92
 			)
-			UIKit.IconCircle(
-				if known then (Theme.DimensionIcons[def.Dimension] or "🐾") else "❓",
-				if known then color else Theme.Palette.Gray[2],
-				46,
-				{
+			if known then
+				Widgets.RarityTile(Theme.DimensionIcons[def.Dimension] or "🐾", def.Rarity, 56, {
 					AnchorPoint = Vector2.new(0.5, 0),
-					Position = UDim2.new(0.5, 0, 0, 6),
+					Position = UDim2.new(0.5, 0, 0, 7),
 					Parent = card,
-				}
-			)
-			UIKit.Text({
+				})
+			else
+				UIKit.IconTile("❓", Color3.fromRGB(40, 54, 96), 56, {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.new(0.5, 0, 0, 7),
+					Parent = card,
+				})
+			end
+			UIKit.Body({
 				Text = if known then def.Name else "???",
-				TextSize = 15,
+				TextSize = 17,
+				TextColor3 = Theme.Text,
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextWrapped = false,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				Position = UDim2.fromOffset(6, 54),
-				Size = UDim2.new(1, -12, 0, 20),
+				Position = UDim2.fromOffset(6, 65),
+				Size = UDim2.new(1, -12, 0, 21),
+				Stroke = 1.8,
 				Parent = card,
 			})
-			local pill = UIKit.Pill(if rarity then rarity.Name else def.Rarity, color, {
+			-- La rareté reste visible même inconnue (encart sombre : la couleur ressort)
+			Widgets.RarityTag(def.Rarity, {
+				TextSize = 15,
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, 76),
-				Size = UDim2.fromOffset(0, 20),
-				TextSize = 12,
+				Position = UDim2.new(0.5, 0, 0, 87),
 				Parent = card,
 			})
-			pill.ZIndex = 2
 			UIKit.Text({
 				Text = if def.Rarity == "Secret"
 					then "✨ Portail doré"
 					else "🎲 " .. Format.Percent(Odds.GetCreatureChance(selected, luck, def.Id)),
-				TextSize = 13,
+				TextSize = 16,
 				TextColor3 = Theme.Gold,
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextWrapped = false,
-				Position = UDim2.fromOffset(4, 99),
-				Size = UDim2.new(1, -8, 0, 18),
+				Position = UDim2.fromOffset(4, 111),
+				Size = UDim2.new(1, -8, 0, 19),
+				Stroke = 2,
+				Fit = true,
 				Parent = card,
 			})
 		end

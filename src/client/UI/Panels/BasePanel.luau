@@ -19,25 +19,25 @@ BasePanel.Color = "Orange"
 
 local ICONS = { Slots = "🧩", Barrier = "🛡️", Alarm = "🚨" }
 local COLORS = {
-	Slots = Color3.fromRGB(90, 160, 255),
-	Barrier = Color3.fromRGB(255, 90, 100),
-	Alarm = Color3.fromRGB(255, 180, 50),
+	Slots = Color3.fromRGB(40, 140, 255),
+	Barrier = Color3.fromRGB(255, 60, 60),
+	Alarm = Color3.fromRGB(255, 160, 0),
 }
 
 function BasePanel.Create(content: Frame, ctx)
 	local top = Widgets.Row({ Size = UDim2.new(1, 0, 0, 40), Parent = content }, 10)
 	local slotsPill = UIKit.Pill(
 		"📦 8 emplacements",
-		COLORS.Slots,
+		Theme.Info,
 		{ Parent = top, LayoutOrder = 1, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
 	)
 	local barrierPill = UIKit.Pill(
 		"🛡️ 1:00",
-		COLORS.Barrier,
+		Theme.Danger,
 		{ Parent = top, LayoutOrder = 2, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
 	)
 	UIKit.Body({
-		Text = "Conservées après un rebirth",
+		Text = "♻️ Conservées après un rebirth",
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.fromOffset(0, 36),
@@ -50,8 +50,8 @@ function BasePanel.Create(content: Frame, ctx)
 
 	for order, upgrade in Upgrades.List do
 		local color = COLORS[upgrade.Id] or Theme.Palette.Blue[2]
-		local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 120), LayoutOrder = order, Parent = list }, color, 0.25)
-		UIKit.IconCircle(ICONS[upgrade.Id] or "⭐", color, 84, {
+		local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 120), LayoutOrder = order, Parent = list })
+		UIKit.IconTile(ICONS[upgrade.Id] or "⭐", color, 86, {
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 14, 0.5, 0),
 			Parent = card,
@@ -60,51 +60,54 @@ function BasePanel.Create(content: Frame, ctx)
 			Text = upgrade.Name,
 			TextSize = 24,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(112, 10),
-			Size = UDim2.new(1, -310, 0, 28),
+			Position = UDim2.fromOffset(114, 9),
+			Size = UDim2.new(1, -330, 0, 30),
+			Stroke = 2.8,
+			Fit = true,
 			Parent = card,
 		})
 		UIKit.Body({
 			Text = upgrade.Description,
-			TextColor3 = Color3.fromRGB(230, 222, 255),
-			Position = UDim2.fromOffset(112, 40),
-			Size = UDim2.new(1, -310, 0, 36),
+			Position = UDim2.fromOffset(114, 40),
+			Size = UDim2.new(1, -330, 0, 38),
 			TextYAlignment = Enum.TextYAlignment.Top,
 			Parent = card,
 		})
-		-- Jauge de niveau (une pastille par niveau)
+		-- Jauge de niveau (un carré par niveau)
 		local pips =
-			Widgets.Row({ Position = UDim2.fromOffset(112, 82), Size = UDim2.new(1, -310, 0, 22), Parent = card }, 5)
+			Widgets.Row({ Position = UDim2.fromOffset(114, 84), Size = UDim2.new(1, -330, 0, 22), Parent = card }, 5)
 		local pipFrames = {}
 		for level = 1, upgrade.MaxLevel do
 			local pip = UIKit.New("Frame", {
 				BackgroundColor3 = Theme.Inset,
-				Size = UDim2.fromOffset(18, 18),
+				Size = UDim2.fromOffset(20, 20),
 				LayoutOrder = level,
 				Parent = pips,
 			})
-			UIKit.Round(pip)
-			UIKit.Stroke(pip, 2)
+			UIKit.Corner(pip, 6)
+			UIKit.Stroke(pip, 2.5)
 			pipFrames[level] = pip
 		end
 		local levelText = UIKit.Text({
 			Text = "",
-			TextSize = 15,
+			TextSize = 16,
 			TextColor3 = Theme.Gold,
-			TextXAlignment = Enum.TextXAlignment.Right,
+			TextXAlignment = Enum.TextXAlignment.Center,
 			TextWrapped = false,
 			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -14, 0, 12),
-			Size = UDim2.fromOffset(176, 22),
+			Position = UDim2.new(1, -14, 0, 10),
+			Size = UDim2.fromOffset(196, 24),
+			Stroke = 2.2,
+			Fit = true,
 			Parent = card,
 		})
 		local button = UIKit.Button({
 			Text = "",
-			Color = "Gold",
-			TextSize = 20,
+			Color = "Green",
+			TextSize = 23,
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.new(1, -14, 1, -12),
-			Size = UDim2.fromOffset(176, 58),
+			Size = UDim2.fromOffset(196, 62),
 			ZIndex = 2,
 			Parent = card,
 			OnClick = function()
@@ -132,13 +135,13 @@ function BasePanel.Create(content: Frame, ctx)
 		for id, row in rows do
 			local level = profile.Upgrades[id] or 0
 			for index, pip in row.Pips do
-				pip.BackgroundColor3 = if index <= level then Theme.Lighten(row.Color, 0.2) else Theme.Inset
+				pip.BackgroundColor3 = if index <= level then Theme.Gold else Theme.Inset
 			end
 			local cost = Upgrades.GetCost(id, level)
 			row.LevelText.Text =
-				string.format("Niv. %d ➜ %s", level, if cost then row.Upgrade.LevelText(level + 1) else "MAX")
+				string.format("Niv. %d » %s", level, if cost then row.Upgrade.LevelText(level + 1) else "MAX")
 			if cost then
-				row.Button:SetText("💰 " .. Format.Money(cost))
+				row.Button:SetText(Format.Money(cost))
 				row.Button:SetEnabled(money >= cost)
 			else
 				row.Button:SetText("✅ MAX")

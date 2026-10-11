@@ -6,7 +6,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local Creatures = require(Shared.Config.Creatures)
-local Rarities = require(Shared.Config.Rarities)
 local Mutations = require(Shared.Config.Mutations)
 local Economy = require(Shared.Modules.Economy)
 local Format = require(Shared.Modules.Format)
@@ -20,33 +19,33 @@ InventoryPanel.Icon = "🐾"
 InventoryPanel.Color = "Blue"
 
 function InventoryPanel.Create(content: Frame, ctx)
-	local top = Widgets.Row({ Size = UDim2.new(1, -170, 0, 48), Parent = content }, 10)
+	local top = Widgets.Row({ Size = UDim2.new(1, -190, 0, 52), Parent = content }, 10)
 	local slotsPill = UIKit.Pill(
 		"📦 0 / 8",
-		Color3.fromRGB(90, 140, 255),
+		Theme.Info,
 		{ Parent = top, LayoutOrder = 1, Size = UDim2.fromOffset(0, 38), TextSize = 19 }
 	)
 	local incomePill = UIKit.Pill(
 		"💸 $0/s",
-		Color3.fromRGB(60, 190, 90),
+		Color3.fromRGB(255, 190, 0),
 		{ Parent = top, LayoutOrder = 2, Size = UDim2.fromOffset(0, 38), TextSize = 19 }
 	)
 	UIKit.Button({
-		Text = "🌀 Fusion",
+		Text = "🌀 FUSION",
 		Color = "Purple",
-		TextSize = 20,
+		TextSize = 21,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0),
-		Size = UDim2.fromOffset(160, 50),
+		Size = UDim2.fromOffset(176, 52),
 		Parent = content,
 		OnClick = function()
 			ctx.UI.Open("Fusion")
 		end,
 	})
 
-	local grid = UIKit.ScrollGrid(content, UDim2.new(0.5, -8, 0, 118), {
-		Position = UDim2.fromOffset(0, 62),
-		Size = UDim2.new(1, 0, 1, -62),
+	local grid = UIKit.ScrollGrid(content, UDim2.new(0.5, -8, 0, 124), {
+		Position = UDim2.fromOffset(0, 64),
+		Size = UDim2.new(1, 0, 1, -64),
 	})
 
 	local focusUid: string? = nil
@@ -104,67 +103,75 @@ function InventoryPanel.Create(content: Frame, ctx)
 			if not def then
 				continue
 			end
-			local rarity = Rarities.Get(def.Rarity)
-			local rarityColor = if rarity then rarity.Color else Theme.Text
 			local mutation = Mutations.Get(entry.Mutation)
 
-			local card = UIKit.Card({ LayoutOrder = order, Parent = grid }, rarityColor, 0.4)
+			local card = UIKit.Card({ LayoutOrder = order, Parent = grid })
 			if entry.Uid == focusUid then
 				local focusStroke = card:FindFirstChildOfClass("UIStroke")
 				if focusStroke then
 					focusStroke.Color = Theme.Gold
-					focusStroke.Thickness = 4
+					focusStroke.Thickness = 4.5
 				end
 			end
-			UIKit.IconCircle(Theme.DimensionIcons[def.Dimension] or "🐾", rarityColor, 70, {
+			local tile = Widgets.RarityTile(Theme.DimensionIcons[def.Dimension] or "🐾", def.Rarity, 84, {
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.new(0, 12, 0.5, 0),
 				Parent = card,
 			})
-			UIKit.Text({
+			if stolen[entry.Uid] then
+				-- Ruban rouge sur l'icône : cette créature est en train d'être volée
+				UIKit.Pill("EN VOL", Theme.Danger, {
+					AnchorPoint = Vector2.new(0.5, 1),
+					Position = UDim2.new(0.5, 0, 1, 8),
+					Size = UDim2.fromOffset(0, 24),
+					TextSize = 15,
+					Parent = tile,
+				})
+			end
+			UIKit.Body({
 				Text = def.Name,
 				TextSize = 21,
+				TextColor3 = Theme.Text,
 				TextWrapped = false,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				Position = UDim2.fromOffset(94, 10),
-				Size = UDim2.new(1, -104, 0, 26),
+				Position = UDim2.fromOffset(110, 8),
+				Size = UDim2.new(1, -120, 0, 26),
+				Stroke = 2,
 				Parent = card,
 			})
-			local pills =
-				Widgets.Row({ Position = UDim2.fromOffset(94, 40), Size = UDim2.new(1, -104, 0, 26), Parent = card }, 6)
-			UIKit.Pill(
-				if rarity then rarity.Name else def.Rarity,
-				rarityColor,
-				{ Parent = pills, LayoutOrder = 1, TextSize = 14 }
+			-- Rareté (encart sombre : la couleur ressort) + mutation
+			local tags = Widgets.Row(
+				{ Position = UDim2.fromOffset(110, 37), Size = UDim2.new(1, -120, 0, 24), Parent = card },
+				6
 			)
+			Widgets.RarityTag(def.Rarity, { TextSize = 16, LayoutOrder = 1, Parent = tags })
 			if mutation then
 				UIKit.Pill(
 					string.format("%s x%d", mutation.Name, mutation.Multiplier),
 					mutation.Color,
-					{ Parent = pills, LayoutOrder = 2, TextSize = 14 }
+					{ Parent = tags, LayoutOrder = 2, Size = UDim2.fromOffset(0, 24), TextSize = 16 }
 				)
-			end
-			if stolen[entry.Uid] then
-				UIKit.Pill("🚨 EN VOL", Theme.Danger, { Parent = pills, LayoutOrder = 3, TextSize = 14 })
 			end
 			UIKit.Text({
 				Text = Format.Income(Economy.GetCreatureIncome(entry)),
-				TextSize = 20,
-				TextColor3 = Theme.Money,
+				TextSize = 25,
+				TextColor3 = Theme.Income,
 				TextWrapped = false,
-				Position = UDim2.fromOffset(94, 74),
-				Size = UDim2.new(1, -230, 0, 28),
+				Position = UDim2.fromOffset(110, 74),
+				Size = UDim2.new(1, -268, 0, 34),
+				Stroke = 2.8,
+				Fit = true,
 				Parent = card,
 			})
 
 			local confirming = confirmUid == entry.Uid
 			UIKit.Button({
-				Text = if confirming then "Sûr ?" else "Vendre " .. Format.Money(Economy.GetSellValue(entry)),
+				Text = if confirming then "SÛR ?" else "Vendre " .. Format.Money(Economy.GetSellValue(entry)),
 				Color = if confirming then "Red" else "Orange",
-				TextSize = 15,
+				TextSize = 18,
 				AnchorPoint = Vector2.new(1, 1),
-				Position = UDim2.new(1, -10, 1, -8),
-				Size = UDim2.fromOffset(124, 42),
+				Position = UDim2.new(1, -10, 1, -10),
+				Size = UDim2.fromOffset(142, 48),
 				ZIndex = 2,
 				Parent = card,
 				OnClick = function()

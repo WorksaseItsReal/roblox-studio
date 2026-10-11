@@ -16,74 +16,83 @@ local RebirthPanel = {}
 RebirthPanel.Title = "Rebirth"
 RebirthPanel.Icon = "🔁"
 RebirthPanel.Color = "Pink"
+RebirthPanel.Height = 530
 
-local PINK = Color3.fromRGB(240, 90, 190)
+local PINK = Color3.fromRGB(255, 70, 180)
 
-local function bigStat(parent: Instance, position: UDim2, title: string, color: Color3)
-	local card = UIKit.Card({ Position = position, Size = UDim2.fromOffset(250, 130), Parent = parent }, color, 0.45)
+local function bigStat(parent: Instance, position: UDim2, title: string, tint: Color3?)
+	local card = UIKit.Card({ Position = position, Size = UDim2.fromOffset(256, 136), Parent = parent }, tint)
 	UIKit.Text({
 		Text = title,
 		TextSize = 18,
 		TextColor3 = Theme.TextDim,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(0, 8),
+		Position = UDim2.fromOffset(0, 9),
 		Size = UDim2.new(1, 0, 0, 24),
+		Stroke = 2.2,
 		Parent = card,
 	})
 	local value = UIKit.Text({
 		Text = "x1",
-		TextSize = 54,
+		TextSize = 58,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
 		Position = UDim2.fromOffset(0, 34),
-		Size = UDim2.new(1, 0, 0, 58),
-		Stroke = 4,
+		Size = UDim2.new(1, 0, 0, 62),
+		Stroke = 5,
 		Parent = card,
 	})
+	UIKit.Gradient(value, Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 226, 120))
 	local sub = UIKit.Text({
 		Text = "",
 		TextSize = 16,
 		TextColor3 = Theme.Gold,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(0, 96),
-		Size = UDim2.new(1, 0, 0, 22),
+		Position = UDim2.fromOffset(8, 100),
+		Size = UDim2.new(1, -16, 0, 24),
+		Stroke = 2.2,
+		Fit = true,
 		Parent = card,
 	})
 	return value, sub
 end
 
 function RebirthPanel.Create(content: Frame, ctx)
-	local nowValue, nowSub = bigStat(content, UDim2.new(0.5, -330, 0, 6), "MAINTENANT", Color3.fromRGB(120, 110, 200))
-	local nextValue, nextSub = bigStat(content, UDim2.new(0.5, 80, 0, 6), "APRÈS REBIRTH", PINK)
+	local nowValue, nowSub = bigStat(content, UDim2.new(0.5, -338, 0, 4), "MAINTENANT", nil)
+	local nextValue, nextSub = bigStat(content, UDim2.new(0.5, 82, 0, 4), "APRÈS REBIRTH", PINK)
+	-- Grosse flèche dorée (police du jeu, pas d'émoji)
 	UIKit.Text({
-		Text = "➜",
-		TextSize = 64,
+		Text = "»",
+		TextSize = 96,
+		TextColor3 = Theme.Gold,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 40),
-		Size = UDim2.fromOffset(120, 70),
-		TextColor3 = Theme.Gold,
-		Stroke = 4,
+		Position = UDim2.new(0.5, 0, 0, 22),
+		Size = UDim2.fromOffset(120, 100),
+		Stroke = 5,
 		Parent = content,
 	})
 
 	local progress = UIKit.ProgressBar(
-		{ Position = UDim2.fromOffset(40, 156), Size = UDim2.new(1, -80, 0, 38), Parent = content },
-		PINK
+		{ Position = UDim2.fromOffset(40, 160), Size = UDim2.new(1, -80, 0, 40), Parent = content },
+		Theme.Money
 	)
+	local progressLabel = progress.Instance:FindFirstChild("Label") :: TextLabel
+	UIKit.Fit(progressLabel, 20)
 
 	local confirming = false
 	local button
 	button = UIKit.Button({
 		Text = "🔁 RENAÎTRE",
 		Color = "Pink",
-		TextSize = 28,
+		TextSize = 30,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 210),
-		Size = UDim2.fromOffset(380, 76),
+		Position = UDim2.new(0.5, 0, 0, 216),
+		Size = UDim2.fromOffset(400, 80),
+		Radius = 16,
 		Parent = content,
 		OnClick = function()
 			if not confirming then
@@ -102,20 +111,59 @@ function RebirthPanel.Create(content: Frame, ctx)
 	})
 
 	local warning =
-		UIKit.Inset({ Position = UDim2.fromOffset(40, 306), Size = UDim2.new(1, -80, 0, 100), Parent = content })
+		UIKit.Inset({ Position = UDim2.fromOffset(40, 314), Size = UDim2.new(1, -80, 0, 104), Parent = content })
 	local warningRow =
-		Widgets.Row({ Position = UDim2.fromOffset(14, 10), Size = UDim2.new(1, -28, 0, 30), Parent = warning }, 8)
+		Widgets.Row({ Position = UDim2.fromOffset(14, 10), Size = UDim2.new(1, -28, 0, 36), Parent = warning }, 8)
+	UIKit.Text({
+		Text = "TU PERDS",
+		TextSize = 19,
+		TextColor3 = Color3.fromRGB(255, 130, 130),
+		TextWrapped = false,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, 30),
+		LayoutOrder = 0,
+		Stroke = 2,
+		Parent = warningRow,
+	})
 	UIKit.Pill(
 		"❌ Argent remis à " .. Format.Money(GameConfig.Economy.StartingMoney),
 		Theme.Danger,
-		{ Parent = warningRow, LayoutOrder = 1, TextSize = 14 }
+		{ Parent = warningRow, LayoutOrder = 1, Size = UDim2.fromOffset(0, 30), TextSize = 16 }
 	)
-	UIKit.Pill("❌ Créatures perdues", Theme.Danger, { Parent = warningRow, LayoutOrder = 2, TextSize = 14 })
+	UIKit.Pill(
+		"❌ Créatures",
+		Theme.Danger,
+		{ Parent = warningRow, LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), TextSize = 16 }
+	)
 	local keepRow =
-		Widgets.Row({ Position = UDim2.fromOffset(14, 56), Size = UDim2.new(1, -28, 0, 30), Parent = warning }, 8)
-	UIKit.Pill("✅ Améliorations", Color3.fromRGB(60, 190, 90), { Parent = keepRow, LayoutOrder = 1, TextSize = 14 })
-	UIKit.Pill("✅ Index", Color3.fromRGB(60, 190, 90), { Parent = keepRow, LayoutOrder = 2, TextSize = 14 })
-	UIKit.Pill("✅ Gamepasses", Color3.fromRGB(60, 190, 90), { Parent = keepRow, LayoutOrder = 3, TextSize = 14 })
+		Widgets.Row({ Position = UDim2.fromOffset(14, 56), Size = UDim2.new(1, -28, 0, 36), Parent = warning }, 8)
+	UIKit.Text({
+		Text = "TU GARDES",
+		TextSize = 19,
+		TextColor3 = Theme.Money,
+		TextWrapped = false,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, 30),
+		LayoutOrder = 0,
+		Stroke = 2,
+		Parent = keepRow,
+	})
+	local KEEP_GREEN = Color3.fromRGB(40, 200, 60)
+	UIKit.Pill(
+		"✅ Améliorations",
+		KEEP_GREEN,
+		{ Parent = keepRow, LayoutOrder = 1, Size = UDim2.fromOffset(0, 30), TextSize = 16 }
+	)
+	UIKit.Pill(
+		"✅ Index",
+		KEEP_GREEN,
+		{ Parent = keepRow, LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), TextSize = 16 }
+	)
+	UIKit.Pill(
+		"✅ Gamepasses",
+		KEEP_GREEN,
+		{ Parent = keepRow, LayoutOrder = 3, Size = UDim2.fromOffset(0, 30), TextSize = 16 }
+	)
 
 	local self = {} :: any
 

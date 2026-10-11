@@ -8,7 +8,10 @@
 	- RarityMultipliers : multiplie le poids de base de chaque rareté
 	- SpawnIntervalMultiplier : < 1 = plus de spawns
 	- WalkSpeedMultiplier : vitesse des créatures sur le chemin (< 1 = plus de temps pour acheter)
-	- Visual : couleurs utilisées par le client (faille, éclairage, brouillard)
+	- Visual : couleurs utilisées par le client. RiftColor / RiftAccent colorent la
+	  Rift, les chevrons du tapis et les lampadaires ; Ambient (Lighting.Ambient),
+	  FogColor (nuance de l'atmosphère, mélangée au ciel clair) et Tint (teinte de
+	  l'image) restent SUBTILS, proches du neutre : le monde garde ses couleurs vives
 	- Palette / Material : utilisés par les modèles procéduraux des créatures
 ]]
 
@@ -46,9 +49,9 @@ Dimensions.ById = {
 		Visual = {
 			RiftColor = Color3.fromRGB(255, 90, 20),
 			RiftAccent = Color3.fromRGB(255, 200, 60),
-			Ambient = Color3.fromRGB(110, 60, 40),
-			FogColor = Color3.fromRGB(120, 45, 20),
-			Tint = Color3.fromRGB(255, 225, 205),
+			Ambient = Color3.fromRGB(112, 98, 92),
+			FogColor = Color3.fromRGB(255, 160, 100),
+			Tint = Color3.fromRGB(255, 247, 240),
 		},
 		Palette = {
 			Color3.fromRGB(255, 100, 30),
@@ -68,9 +71,9 @@ Dimensions.ById = {
 		Visual = {
 			RiftColor = Color3.fromRGB(120, 40, 255),
 			RiftAccent = Color3.fromRGB(240, 240, 255),
-			Ambient = Color3.fromRGB(50, 35, 80),
-			FogColor = Color3.fromRGB(25, 10, 45),
-			Tint = Color3.fromRGB(215, 200, 255),
+			Ambient = Color3.fromRGB(100, 92, 120),
+			FogColor = Color3.fromRGB(170, 120, 255),
+			Tint = Color3.fromRGB(248, 244, 255),
 		},
 		Palette = {
 			Color3.fromRGB(35, 20, 60),
@@ -90,9 +93,9 @@ Dimensions.ById = {
 		Visual = {
 			RiftColor = Color3.fromRGB(110, 220, 255),
 			RiftAccent = Color3.fromRGB(255, 255, 255),
-			Ambient = Color3.fromRGB(110, 140, 170),
-			FogColor = Color3.fromRGB(190, 225, 255),
-			Tint = Color3.fromRGB(215, 240, 255),
+			Ambient = Color3.fromRGB(92, 106, 122),
+			FogColor = Color3.fromRGB(150, 215, 255),
+			Tint = Color3.fromRGB(242, 250, 255),
 		},
 		Palette = {
 			Color3.fromRGB(170, 230, 255),
@@ -112,9 +115,9 @@ Dimensions.ById = {
 		Visual = {
 			RiftColor = Color3.fromRGB(255, 120, 200),
 			RiftAccent = Color3.fromRGB(120, 255, 230),
-			Ambient = Color3.fromRGB(150, 110, 140),
-			FogColor = Color3.fromRGB(255, 190, 230),
-			Tint = Color3.fromRGB(255, 230, 245),
+			Ambient = Color3.fromRGB(116, 96, 112),
+			FogColor = Color3.fromRGB(255, 160, 220),
+			Tint = Color3.fromRGB(255, 244, 251),
 		},
 		Palette = {
 			Color3.fromRGB(255, 140, 205),
@@ -134,9 +137,9 @@ Dimensions.ById = {
 		Visual = {
 			RiftColor = Color3.fromRGB(0, 255, 140),
 			RiftAccent = Color3.fromRGB(0, 170, 255),
-			Ambient = Color3.fromRGB(40, 90, 80),
-			FogColor = Color3.fromRGB(10, 40, 40),
-			Tint = Color3.fromRGB(205, 255, 235),
+			Ambient = Color3.fromRGB(88, 110, 106),
+			FogColor = Color3.fromRGB(100, 255, 200),
+			Tint = Color3.fromRGB(242, 255, 250),
 		},
 		Palette = {
 			Color3.fromRGB(30, 35, 45),

@@ -1,9 +1,13 @@
 # Steal a Rift
 
 Jeu Roblox inspiré de *Steal a Brainrot*, revisité autour de portails dimensionnels.
-Au centre d'une île flottante, une faille géante (la **Rift**) libère des créatures qui
-suivent un chemin circulaire. Les joueurs les achètent, les installent dans leur base pour
-générer de l'argent, et volent celles des autres.
+Sur une île flottante, une faille géante (la **Rift**) libère des créatures qui défilent
+sur un long tapis rouge, entre deux rangées de bases. Les joueurs les achètent, les
+installent dans leur base pour générer de l'argent, et volent celles des autres.
+
+Style visuel : celui de la famille *Steal a Brainrot* / *Steal an Egg* (couleurs vives,
+contours noirs, polices Luckiest Guy et Fredoka One, tapis central, bases de chaque côté).
+Cahier des charges : **[docs/ART_DIRECTION.md](docs/ART_DIRECTION.md)**.
 
 ---
 
@@ -12,16 +16,20 @@ générer de l'argent, et volent celles des autres.
 | Vue générale | L'île flottante |
 |---|---|
 | ![Vue générale](docs/previews/monde_vue_generale.jpg) | ![Île](docs/previews/monde_ile_flottante.jpg) |
-| **La Rift** | **Une base** |
-| ![Rift](docs/previews/monde_rift.jpg) | ![Base](docs/previews/monde_base.jpg) |
-| **Les 40 créatures (5 dimensions)** | **HUD** |
-| ![Créatures](docs/previews/creatures.jpg) | ![HUD](docs/previews/ui_hud.jpg) |
+| **Le tapis (vue joueur)** | **La Rift et les classements** |
+| ![Tapis](docs/previews/monde_tapis.jpg) | ![Rift](docs/previews/monde_rift.jpg) |
+| **Base verrouillée (lasers)** | **Les 40 créatures (5 dimensions)** |
+| ![Base](docs/previews/monde_base.jpg) | ![Créatures](docs/previews/creatures.jpg) |
+| **Étiquettes des créatures** | **HUD** |
+| ![Étiquettes](docs/previews/creatures_etiquettes.jpg) | ![HUD](docs/previews/ui_hud.jpg) |
 | **Quêtes du jour** | **Cadeaux de session** |
 | ![Quêtes](docs/previews/ui_quetes.jpg) | ![Cadeaux](docs/previews/ui_cadeaux.jpg) |
 | **Tutoriel guidé** | **Inventaire** |
 | ![Tutoriel](docs/previews/ui_tutoriel.jpg) | ![Inventaire](docs/previews/ui_inventaire.jpg) |
 | **Index** | **Boutique** |
 | ![Index](docs/previews/ui_index.jpg) | ![Boutique](docs/previews/ui_boutique.jpg) |
+| **Téléphone (844×390)** | **Retour après absence** |
+| ![Téléphone](docs/previews/ui_telephone.jpg) | ![Hors ligne](docs/previews/ui_hors_ligne.jpg) |
 
 > Ces images sont des **aperçus générés hors Roblox** : rendu three.js de la géométrie exacte
 > de la map et des créatures, rendu HTML de l'arbre d'interface produit par le vrai code.
@@ -64,12 +72,13 @@ rojo build default.project.json -o build/rojo.rbxl
 lune run scripts/build-place.luau build/rojo.rbxl StealARift.rbxl
 ```
 
-> **Correctif de cette version** : dans la version précédente du `.rbxl`, les bases étaient
-> tournées de travers (45° ou 135°), la route était en dents de scie et les flèches
-> pointaient à l'envers. Cause : `CFrame.lookAt` de Lune (l'outil qui « cuit » la map hors
-> de Roblox) renvoie une orientation en miroir. `MapBuilder` utilise désormais son propre
+> **Remplace ton ancien `StealARift.rbxl` par celui-ci** : la map a changé de disposition
+> (tapis en ligne droite au lieu de l'anneau). `MapService` garde la `Workspace.Map` déjà
+> présente dans un fichier : une ancienne place continuerait d'afficher l'ancienne map.
+>
+> Note technique : `CFrame.lookAt` de Lune (l'outil qui « cuit » la map hors de Roblox)
+> renvoie une orientation en miroir. `MapBuilder` et `CreatureVisuals` utilisent leur propre
 > `lookAt` basé sur `CFrame.fromMatrix`, identique à Roblox dans les deux environnements.
-> **Remplace ton ancien `StealARift.rbxl` par celui-ci.**
 
 ---
 
@@ -81,6 +90,7 @@ StealARift.rbxl               Place prête à ouvrir (scripts + map)
 scripts/build-place.luau      Construit StealARift.rbxl (Lune)
 docs/MAP_BUILD.md             Construire / personnaliser la map dans Studio
 docs/LAUNCH.md                Lancement : bloquants, tests, plan, description de la page
+docs/ART_DIRECTION.md         Direction artistique (palette, polices, disposition)
 marketing/                    Icône + miniatures pour la page Roblox
 
 src/shared/   -> ReplicatedStorage.Shared
@@ -169,19 +179,25 @@ src/client/   -> StarterPlayer.StarterPlayerScripts.Client
 
 ## Direction artistique
 
-- **Interface "simulateur"** (`src/client/UI`) : système de design centralisé dans `Theme.luau`
-  et `UIKit.luau` : boutons 3D, contours épais, textes Fredoka One, icônes emoji, pastilles,
-  barres de progression, badges « ! » sur ce qui est réclamable. Toute l'UI est mise à
-  l'échelle automatiquement (PC, tablette, téléphone) à partir d'un écran de référence 1280x760.
-- **Créatures** (`CreatureVisuals.luau`) : corps arrondis (ellipsoïdes `SpecialMesh`, aucun
-  asset à publier), gros yeux brillants, un style par dimension, couronne dès Légendaire,
-  disque lumineux de rareté, aura pour les mutations. Elles se dandinent sur le chemin et
-  « respirent » dans les bases.
-- **Map** (`MapBuilder.luau`) : île flottante au-dessus d'une mer de nuages (cumulus en
-  grappes), bosquets, îlots à l'horizon ; Rift entre deux piliers de roche ; route circulaire
-  avec chevrons lumineux dans le sens de marche ; 8 bases tournées vers la Rift avec allées ;
-  2 tableaux de classement géants entre deux bases. Tout ce qui brille se recolore selon la
-  dimension active (et vire au violet pendant la tempête).
+Détail complet (palette, polices, disposition, règles) : `docs/ART_DIRECTION.md`.
+
+- **Interface** (`src/client/UI`) : fenêtres bleu vif à en-tête coloré, cartes plus claires,
+  contours noirs épais, boutons 3D avec rebord, **Luckiest Guy** (titres, boutons, montants,
+  toujours en majuscules) et **Fredoka One** (textes courants). Code couleur constant : vert =
+  argent / acheter, or = récompenses, rouge = danger / vol, bleu = navigation, violet = rare.
+  Mise à l'échelle automatique (PC, tablette, téléphone) et mode compact sur petits écrans :
+  le rail de récompenses s'écarte du bouton de saut tactile de Roblox.
+- **Créatures** (`CreatureVisuals.luau`) : couleurs franches par dimension, gros yeux
+  brillants, joues roses, silhouettes lisibles de loin, couronne dès Légendaire, traitement
+  arc-en-ciel pour Secret, mutations bien distinctes. **Étiquette au-dessus de chaque
+  créature** dans le style du genre : mutation, nom, rareté en dégradé, revenu par seconde,
+  prix sur le tapis. Les étiquettes des bases se simplifient avec la distance.
+- **Map** (`MapBuilder.luau`) : long **tapis rouge** à bordures or et chevrons lumineux,
+  trottoirs et lampadaires, **4 bases de chaque côté** (murs couleur d'équipe, sol blanc,
+  socles blancs à anneau néon, grande arche « BASE DE {NOM} », gros bouton de verrouillage
+  rouge, **lasers rouges** quand la base est verrouillée). La **Rift** géante au nord du
+  tapis, un portail de sortie au sud, 2 classements géants à côté de la Rift. Île flottante,
+  falaises, mer de nuages, arbres et rochers autour. Plein jour franc (éclairage Future).
 - Pour aller plus loin : remplace les créatures procédurales par de vrais modèles 3D
   (`ReplicatedStorage.Assets.Creatures`, voir `docs/MAP_BUILD.md`). C'est le levier visuel n°1.
 
@@ -193,7 +209,7 @@ src/client/   -> StarterPlayer.StarterPlayerScripts.Client
 |---|---|---|
 | Les créatures sortent de la Rift | `RiftService` | 1 toutes les ~3,5 s, tirage rareté puis créature (`Odds`) |
 | Achat | `ShopService` | Touche **E** près d'une créature sur le chemin |
-| Trajet jusqu'à la base | `ShopService` + `ConveyorController` | Contourne l'anneau puis entre dans la base |
+| Trajet jusqu'à la base | `ShopService` + `ConveyorController` | Quitte le tapis, longe le trottoir, entre par l'arche puis rejoint son socle |
 | Revenus | `IncomeService` | Toutes les secondes, revenu x rebirth x index x gamepass x amis/groupe x boost |
 | Vol | `StealService` | Maintenir **E** sur une créature adverse, rentrer dans SA base |
 | Récupération | `StealService` | Le propriétaire touche le voleur |
@@ -291,9 +307,15 @@ affichées dans la boutique et l'index (règle Roblox sur les achats influençan
 - Contrôles croisés statiques : chaque appel entre services, chaque champ `ctx` / `State` /
   `ctx.UI` / `ctx.Net` et chaque nom de remote existe ; chaque RemoteFunction a un handler
   serveur.
-- `StealARift.rbxl` relu : 8 bases orientées vers la Rift (entrée côté route, emplacements de
-  l'entrée vers le fond), éclairage Future + effets, 26 services, 12 panneaux.
-- Rendus de contrôle (aperçus ci-dessus) de la map, des créatures et de chaque écran.
+- `StealARift.rbxl` relu par un script (4605 assertions, 0 échec) : 8 bases face au tapis,
+  entrées entre la base et le tapis, 28 socles chacune, chemin droit de 385 studs, lasers
+  dans le plan de la barrière, panneaux et classements présents, 704 trajets « tapis -> socle »
+  calculés sans traverser de mur ni de socle.
+- 40 créatures x 5 états de mutation construites (600 variantes), aucune ne déborde de son socle.
+- Rendus de contrôle (aperçus ci-dessus) de la map, des créatures, des étiquettes et de chaque
+  écran, sur PC et sur téléphone (844×390, zone du bouton de saut prise en compte).
+- Relecture du code par des agents indépendants : chaque problème signalé est contre-vérifié
+  avant d'être corrigé.
 
 **Non testé ici** : une vraie session de jeu dans Studio (environnement Linux sans Roblox).
 Lance un test à 2-3 joueurs (Test > Clients and Servers) avant de publier.

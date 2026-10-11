@@ -7,8 +7,9 @@
 	- Activée par le propriétaire (bouton dans la base ou UI). Durée = 60 s
 	  + améliorations + gamepass, puis recharge.
 	- La VRAIE protection est côté serveur : StealService refuse tout vol tant que
-	  la barrière est active. Le mur physique n'est qu'un visuel/obstacle (un
-	  tricheur peut toujours traverser un mur en local, il ne pourra pas voler).
+	  la barrière est active. Le mur physique n'est qu'un obstacle (un tricheur
+	  peut toujours traverser un mur en local, il ne pourra pas voler) ; on le
+	  voit sous forme de faisceaux laser rouges en travers de l'entrée.
 	- Le propriétaire traverse sa propre barrière : son client la rend non
 	  collidable localement (PlotController).
 	- À l'activation, les intrus présents dans la base sont expulsés devant l'entrée.
@@ -43,9 +44,38 @@ function BaseDefenseService.IsBarrierActive(plot): boolean
 	return plot.Model:GetAttribute("BarrierActive") == true
 end
 
+local LENS_ON = Color3.fromRGB(255, 28, 40)
+local LENS_OFF = Color3.fromRGB(90, 24, 30)
+
+-- Lentilles des émetteurs (pièces « LaserLens » de la base, optionnelles) : rouge
+-- vif seulement quand la base est verrouillée (rouge = danger), éteintes sinon
+local function setLenses(plot, active: boolean)
+	for _, child in plot.Model:GetChildren() do
+		if child.Name == "LaserLens" and child:IsA("BasePart") then
+			child.Material = if active then Enum.Material.Neon else Enum.Material.SmoothPlastic
+			child.Color = if active then LENS_ON else LENS_OFF
+		end
+	end
+end
+
+-- La pièce Barrier est le mur LOGIQUE (collision). Le visuel, ce sont les lasers
+-- rouges du dossier Plot.Lasers (attribut optionnel ActiveTransparency par pièce) ;
+-- une map manuelle sans lasers affiche la barrière elle-même.
 local function setBarrierVisual(plot, active: boolean)
-	plot.Barrier.Transparency = if active then 0.35 else 1
 	plot.Barrier.CanCollide = active
+	setLenses(plot, active)
+	local lasers = plot.Model:FindFirstChild("Lasers")
+	if not lasers then
+		plot.Barrier.Transparency = if active then 0.35 else 1
+		return
+	end
+	plot.Barrier.Transparency = 1
+	for _, laser in lasers:GetDescendants() do
+		if laser:IsA("BasePart") then
+			local shown = laser:GetAttribute("ActiveTransparency")
+			laser.Transparency = if active then (if type(shown) == "number" then shown else 0) else 1
+		end
+	end
 end
 
 local function deactivate(plot)
@@ -167,8 +197,10 @@ end
 function BaseDefenseService.Start()
 	Guard.BindFunction("ActivateBarrier", {}, activate)
 
-	-- Bouton physique dans chaque base
+	-- Bouton physique dans chaque base. État visuel de départ cohérent (lasers cachés,
+	-- lentilles éteintes) même pour une map faite à la main
 	for _, plot in Services.MapService.GetPlots() do
+		setBarrierVisual(plot, false)
 		local prompt = plot.LockButton:FindFirstChild("LockPrompt")
 		if prompt and prompt:IsA("ProximityPrompt") then
 			prompt.Triggered:Connect(function(player: Player)

@@ -19,9 +19,12 @@ GiftsPanel.Color = "Pink"
 
 local GIFTS = GameConfig.Playtime.Gifts
 local TYPE_ICONS = { Money = "💰", Boost = "⚡", Creature = "🐾", Bundle = "🎁" }
-local READY = Color3.fromRGB(255, 190, 40)
-local LOCKED = Color3.fromRGB(110, 96, 190)
-local DONE = Color3.fromRGB(70, 200, 100)
+local TYPE_COLORS = {
+	Money = Color3.fromRGB(40, 200, 60),
+	Boost = Color3.fromRGB(255, 150, 0),
+	Creature = Color3.fromRGB(170, 70, 255),
+	Bundle = Color3.fromRGB(255, 190, 0),
+}
 
 -- Secondes de session estimées à partir du dernier instantané
 function GiftsPanel.GetSessionSeconds(profile): number
@@ -65,7 +68,7 @@ function GiftsPanel.Create(content: Frame, ctx)
 	local top = Widgets.Row({ Size = UDim2.new(1, 0, 0, 40), Parent = content }, 10)
 	local sessionPill = UIKit.Pill(
 		"⏱️ Session : 0:00",
-		Color3.fromRGB(230, 90, 170),
+		Theme.Info,
 		{ Parent = top, LayoutOrder = 1, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
 	)
 	UIKit.Body({
@@ -85,7 +88,7 @@ function GiftsPanel.Create(content: Frame, ctx)
 	})
 	UIKit.New("UIGridLayout", {
 		-- -10 (et non -8) : marge pour que 3 colonnes tiennent malgré les arrondis
-		CellSize = UDim2.new(1 / 3, -10, 0, 118),
+		CellSize = UDim2.new(1 / 3, -10, 0, 120),
 		CellPadding = UDim2.fromOffset(12, 10),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = grid,
@@ -93,42 +96,59 @@ function GiftsPanel.Create(content: Frame, ctx)
 
 	local cells = {}
 	for index, gift in GIFTS do
-		local card = UIKit.Card({ LayoutOrder = index, Parent = grid })
-		local gradient = card:FindFirstChildOfClass("UIGradient") :: UIGradient
-		local icon = UIKit.IconCircle(TYPE_ICONS[gift.Reward.Type] or "🎁", READY, 54, {
-			Position = UDim2.fromOffset(10, 10),
-			Parent = card,
+		-- Cadre fixe dans la grille ; la carte, centrée dedans, peut pulser depuis son centre
+		local holder = UIKit.New("Frame", { BackgroundTransparency = 1, LayoutOrder = index, Parent = grid })
+		local card = UIKit.Card({
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1, 1),
+			Parent = holder,
 		})
+		local gradient = card:FindFirstChildOfClass("UIGradient") :: UIGradient
+		local stroke = card:FindFirstChildOfClass("UIStroke") :: UIStroke
+		local icon = UIKit.IconTile(
+			TYPE_ICONS[gift.Reward.Type] or "🎁",
+			TYPE_COLORS[gift.Reward.Type] or Theme.Gold,
+			56,
+			{ Position = UDim2.fromOffset(10, 10), Parent = card }
+		)
 		UIKit.Text({
 			Text = gift.Minutes .. " min",
-			TextSize = 20,
+			TextSize = 22,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(74, 8),
-			Size = UDim2.new(1, -84, 0, 24),
+			Position = UDim2.fromOffset(76, 9),
+			Size = UDim2.new(1, -86, 0, 26),
+			Stroke = 2.6,
 			Parent = card,
 		})
-		local preview = UIKit.Body({
+		-- Argent : gros chiffre vert (code couleur) ; autres récompenses : texte courant
+		local isMoney = gift.Reward.Type == "Money"
+		local preview = UIKit.Text({
 			Text = "",
-			TextColor3 = Color3.fromRGB(240, 235, 255),
-			TextSize = 13,
+			Font = if isMoney then Theme.Font else Theme.BodyFont,
+			TextColor3 = if isMoney then Theme.Money else Theme.Text,
+			TextSize = if isMoney then 21 else 16,
+			TextWrapped = not isMoney,
 			TextYAlignment = Enum.TextYAlignment.Top,
-			Position = UDim2.fromOffset(74, 34),
-			Size = UDim2.new(1, -84, 0, 34),
+			Position = UDim2.fromOffset(76, 36),
+			Size = UDim2.new(1, -86, 0, 34),
+			Stroke = if isMoney then 2.4 else 1.6,
 			Parent = card,
 		})
 		local button = UIKit.Button({
 			Text = "",
 			Color = "Gold",
-			TextSize = 16,
-			Position = UDim2.new(0, 10, 1, -50),
-			Size = UDim2.new(1, -20, 0, 42),
+			TextSize = 17,
+			Position = UDim2.new(0, 10, 1, -52),
+			Size = UDim2.new(1, -20, 0, 44),
 			ZIndex = 2,
 			Parent = card,
 			OnClick = function()
 				ctx.Net.Request("ClaimGift", index)
 			end,
 		})
-		cells[index] = { Gradient = gradient, Icon = icon, Preview = preview, Button = button }
+		cells[index] =
+			{ Card = card, Gradient = gradient, Stroke = stroke, Icon = icon, Preview = preview, Button = button }
 	end
 
 	local self = {} :: any
@@ -149,22 +169,27 @@ function GiftsPanel.Create(content: Frame, ctx)
 			local cell = cells[index]
 			cell.Preview.Text = (gifts.Previews and gifts.Previews[index]) or ""
 			local unlockAt = gift.Minutes * 60
-			local color
+			local ready = not claimed[index] and seconds >= unlockAt
+			-- À ouvrir : la carte la plus vive (or) et qui pulse ; déjà ouvert : bleu nuit
+			-- éteint ; à venir : carte normale avec le compte à rebours
+			local glyph = cell.Icon:FindFirstChild("Glyph") :: TextLabel
+			glyph.TextTransparency = if claimed[index] then 0.4 else 0
+			cell.Stroke.Thickness = if ready then 5 else 3
+			UIKit.Pulse(cell.Card, ready, 0.04)
 			if claimed[index] then
-				color = DONE
-				cell.Button:SetText("✅ Ouvert")
+				cell.Gradient.Color = ColorSequence.new(Theme.Lighten(Theme.Inset, 0.15), Theme.Inset)
+				cell.Button:SetText("✅ OUVERT")
 				cell.Button:SetEnabled(false)
-			elseif seconds >= unlockAt then
-				color = READY
-				cell.Button:SetText("🎁 OUVRIR")
-				cell.Button:SetColor("Gold")
+			elseif ready then
+				cell.Gradient.Color = ColorSequence.new(Theme.Palette.Gold[1], Theme.Palette.Gold[2])
+				cell.Button:SetText("🎁 OUVRIR !")
+				cell.Button:SetColor("Green")
 				cell.Button:SetEnabled(true)
 			else
-				color = LOCKED
+				cell.Gradient.Color = ColorSequence.new(Theme.CardTop, Theme.CardBottom)
 				cell.Button:SetText("🔒 " .. Format.Time(unlockAt - seconds))
 				cell.Button:SetEnabled(false)
 			end
-			cell.Gradient.Color = ColorSequence.new(Theme.Lighten(color, 0.15), Theme.Darken(color, 0.35))
 		end
 	end
 

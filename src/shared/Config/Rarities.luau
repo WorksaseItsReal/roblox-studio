@@ -7,6 +7,11 @@
 
 	LuckAffected : le multiplicateur de chance (pack de chance serveur) s'applique
 	au poids de cette rareté.
+
+	Couleurs : voir docs/ART_DIRECTION.md (tableau des raretés). Secret s'affiche en
+	arc-en-ciel (Rainbow, couleurs dans Rarities.RainbowColors) ; Color reste sa
+	couleur de repli pour les effets à une seule couleur (colonne de lumière,
+	annonces, confettis).
 ]]
 
 export type Rarity = {
@@ -14,12 +19,24 @@ export type Rarity = {
 	Name: string,
 	Tier: number,
 	Weight: number,
-	Color: Color3,
+	Color: Color3, -- couleur de référence (textes, disque au sol, effets)
+	Rainbow: boolean?, -- affichage arc-en-ciel (Secret) : voir Rarities.RainbowColors
 	Scale: number, -- taille du modèle procédural
 	LuckAffected: boolean,
 }
 
 local Rarities = {}
+
+-- Couleurs de l'arc-en-ciel de la rareté Secrète (dégradé des étiquettes, disque, aura),
+-- réparties régulièrement de gauche à droite
+Rarities.RainbowColors = {
+	Color3.fromRGB(255, 64, 64),
+	Color3.fromRGB(255, 190, 30),
+	Color3.fromRGB(80, 235, 80),
+	Color3.fromRGB(30, 200, 255),
+	Color3.fromRGB(150, 80, 255),
+	Color3.fromRGB(255, 70, 200),
+}
 
 Rarities.List = {
 	{
@@ -27,8 +44,8 @@ Rarities.List = {
 		Name = "Commun",
 		Tier = 1,
 		Weight = 62,
-		Color = Color3.fromRGB(190, 190, 190),
-		Scale = 1,
+		Color = Color3.fromRGB(200, 200, 200),
+		Scale = 1.15,
 		LuckAffected = false,
 	},
 	{
@@ -36,8 +53,8 @@ Rarities.List = {
 		Name = "Rare",
 		Tier = 2,
 		Weight = 26,
-		Color = Color3.fromRGB(70, 150, 255),
-		Scale = 1.15,
+		Color = Color3.fromRGB(40, 140, 255),
+		Scale = 1.3,
 		LuckAffected = false,
 	},
 	{
@@ -45,8 +62,8 @@ Rarities.List = {
 		Name = "Épique",
 		Tier = 3,
 		Weight = 9,
-		Color = Color3.fromRGB(170, 85, 255),
-		Scale = 1.3,
+		Color = Color3.fromRGB(170, 70, 255),
+		Scale = 1.45,
 		LuckAffected = true,
 	},
 	{
@@ -54,8 +71,8 @@ Rarities.List = {
 		Name = "Légendaire",
 		Tier = 4,
 		Weight = 2.5,
-		Color = Color3.fromRGB(255, 190, 40),
-		Scale = 1.5,
+		Color = Color3.fromRGB(255, 190, 0),
+		Scale = 1.62,
 		LuckAffected = true,
 	},
 	{
@@ -63,8 +80,8 @@ Rarities.List = {
 		Name = "Mythique",
 		Tier = 5,
 		Weight = 0.5,
-		Color = Color3.fromRGB(255, 60, 90),
-		Scale = 1.75,
+		Color = Color3.fromRGB(255, 40, 70),
+		Scale = 1.85,
 		LuckAffected = true,
 	},
 	{
@@ -72,8 +89,9 @@ Rarities.List = {
 		Name = "Secret",
 		Tier = 6,
 		Weight = 0, -- jamais sur le chemin normal
-		Color = Color3.fromRGB(20, 255, 200),
-		Scale = 2.1,
+		Color = Color3.fromRGB(20, 255, 200), -- repli : l'affichage est arc-en-ciel
+		Rainbow = true,
+		Scale = 2.15,
 		LuckAffected = false,
 	},
 } :: { Rarity }

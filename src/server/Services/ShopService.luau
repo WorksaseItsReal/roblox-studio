@@ -40,31 +40,100 @@ function ShopService.IsWalking(player: Player, uid: string): boolean
 	return list ~= nil and list[uid] ~= nil
 end
 
--- Trajet : position d'achat -> contour de l'anneau -> entrée de la base -> emplacement
-local function computeWalkPoints(from: Vector3, plot, slotIndex: number): { Vector3 }
-	local points = { from }
-	local entrance = plot.Entrance.Position
-	local center, radius = Services.MapService.GetRing()
-
-	if radius then
-		local outer = radius + 9
-		local a0 = math.atan2(from.Z - center.Z, from.X - center.X)
-		local a1 = math.atan2(entrance.Z - center.Z, entrance.X - center.X)
-		local delta = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi -- plus court chemin
-		local steps = math.max(1, math.ceil(math.abs(delta) / (math.pi / 8)))
-		for i = 0, steps do
-			local angle = a0 + delta * (i / steps)
-			table.insert(
-				points,
-				Vector3.new(center.X + math.cos(angle) * outer, from.Y, center.Z + math.sin(angle) * outer)
-			)
+-- Projection horizontale d'un point sur le chemin principal : distance parcourue
+-- jusqu'au point projeté, point projeté et direction du segment
+local function projectOnPath(path: PathMath.Path, position: Vector3): (number, Vector3, Vector3)
+	local points = path.Points
+	local bestGap, bestAlong, bestPoint, bestDirection = math.huge, 0, points[1], Vector3.zAxis
+	for i = 1, #points - 1 do
+		local a, b = points[i], points[i + 1]
+		local segment = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+		local length = segment.Magnitude
+		if length > 1e-3 then
+			local direction = segment / length
+			local t = math.clamp(Vector3.new(position.X - a.X, 0, position.Z - a.Z):Dot(direction), 0, length)
+			local projected = a + direction * t
+			local gap = Vector3.new(position.X - projected.X, 0, position.Z - projected.Z).Magnitude
+			if gap < bestGap then
+				bestGap, bestAlong, bestPoint, bestDirection = gap, path.Cumulative[i] + t, projected, direction
+			end
 		end
 	end
+	return bestAlong, bestPoint, bestDirection
+end
 
+-- Perpendiculaire horizontale à une direction (côté "gauche" du sens de marche)
+local function lateralOf(direction: Vector3): Vector3
+	local normal = Vector3.new(-direction.Z, 0, direction.X)
+	return if normal.Magnitude > 1e-3 then normal.Unit else Vector3.xAxis
+end
+
+-- Trajet d'une créature achetée, sans traverser de mur ni d'autre base :
+--   tapis -> trottoir du côté de sa base -> le long du trottoir (parallèle au
+--   chemin) -> devant l'entrée -> allée de la base -> emplacement.
+-- Marche pour toute map : la "voie" est une parallèle au chemin principal, à
+-- PathData.LaneOffset studs (sinon aux 2/3 de la distance chemin -> entrée).
+local function computeWalkPoints(from: Vector3, plot, slotIndex: number): { Vector3 }
+	local path = Services.MapService.GetPath()
+	local entrance = plot.Entrance.Position
+	local slotTop = Services.PlotService.GetSlotTop(plot, slotIndex).Position
+	local points = { from }
+
+	local fromAlong = projectOnPath(path, from)
+	local entranceAlong, entranceProjected, entranceDirection = projectOnPath(path, entrance)
+	local lateral = Vector3.new(entrance.X - entranceProjected.X, 0, entrance.Z - entranceProjected.Z)
+		:Dot(lateralOf(entranceDirection))
+	local side = if lateral >= 0 then 1 else -1
+	local lane = math.min(Services.MapService.GetLaneOffset() or math.abs(lateral) * 0.68, math.abs(lateral) - 2)
+	if lane > 1 then
+		local function laneAt(along: number): Vector3
+			local position, direction = PathMath.Evaluate(path, along)
+			return Vector3.new(position.X, from.Y, position.Z) + lateralOf(direction) * side * lane
+		end
+		-- Échantillons : point d'achat, coudes du chemin entre les deux, face à l'entrée
+		local samples = { fromAlong }
+		local forward = entranceAlong >= fromAlong
+		local first, last, step = 2, #path.Points - 1, 1
+		if not forward then
+			first, last, step = #path.Points - 1, 2, -1
+		end
+		for i = first, last, step do
+			local along = path.Cumulative[i]
+			if math.abs(along - fromAlong) > 0.5 and math.abs(along - entranceAlong) > 0.5 then
+				if (along > fromAlong) == forward and (along < entranceAlong) == forward then
+					table.insert(samples, along)
+				end
+			end
+		end
+		table.insert(samples, entranceAlong)
+		for _, along in samples do
+			table.insert(points, laneAt(along))
+		end
+	end
 	table.insert(points, Vector3.new(entrance.X, from.Y, entrance.Z))
-	table.insert(points, Services.PlotService.GetSlotTop(plot, slotIndex).Position)
+
+	-- Dans la base : on remonte l'allée, puis on rejoint l'emplacement ENTRE deux rangées
+	-- de socles (juste devant la sienne, côté entrée) : la créature ne traverse ni les
+	-- socles intérieurs ni les créatures qui y sont posées
+	local floorCFrame = plot.Floor.CFrame
+	local entranceLocal = floorCFrame:PointToObjectSpace(entrance)
+	local slotLocal = floorCFrame:PointToObjectSpace(slotTop)
+	local slotSize = plot.Slots[slotIndex].Size
+	local slotRadius = math.max(slotSize.X, slotSize.Y, slotSize.Z) / 2
+	local approachZ = slotLocal.Z - (slotRadius + 1.3)
+	local floorTop = plot.Floor.Position.Y + plot.Floor.Size.Y / 2
+	local function onFloor(x: number, z: number): Vector3
+		local point = floorCFrame:PointToWorldSpace(Vector3.new(x, 0, z))
+		return Vector3.new(point.X, floorTop, point.Z)
+	end
+	table.insert(points, onFloor(entranceLocal.X, approachZ))
+	table.insert(points, onFloor(slotLocal.X, approachZ))
+	table.insert(points, slotTop)
 	return points
 end
+
+-- Exposé pour les vérifications hors Roblox (fonction pure, aucun effet de bord)
+ShopService.ComputeWalkPoints = computeWalkPoints
 
 local function startWalker(player: Player, entry, from: Vector3)
 	local plot = Services.PlotService.GetPlot(player)

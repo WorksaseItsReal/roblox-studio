@@ -35,8 +35,7 @@ export type PlotRecord = {
 local map: Folder
 local path: PathMath.Path
 local plots: { PlotRecord } = {}
-local ringRadius: number? = nil
-local ringCenter: Vector3 = Vector3.zero
+local laneOffset: number? = nil
 
 local REQUIRED_PLOT_PARTS = { "Floor", "Barrier", "Spawn", "ShortcutLanding", "Entrance", "LockButton", "FusionPortal" }
 
@@ -161,10 +160,8 @@ function MapService.Init(_services)
 		fail("PathData : attributs Count / WP1..WPn invalides")
 	end
 	path = readPath :: PathMath.Path
-	local radius = pathData:GetAttribute("RingRadius")
-	ringRadius = if type(radius) == "number" then radius else nil
-	local center = pathData:GetAttribute("RingCenter")
-	ringCenter = if typeof(center) == "Vector3" then center else Vector3.new(0, path.Points[1].Y, 0)
+	local lane = pathData:GetAttribute("LaneOffset")
+	laneOffset = if type(lane) == "number" and lane > 0 then lane else nil
 
 	-- Dossiers runtime
 	for _, name in { "Movers", "Portals" } do
@@ -212,10 +209,11 @@ function MapService.GetPath(): PathMath.Path
 	return path
 end
 
--- Anneau central (rayon nil si la map manuelle n'est pas circulaire) : sert à faire
--- contourner la Rift aux créatures qui rejoignent une base
-function MapService.GetRing(): (Vector3, number?)
-	return ringCenter, ringRadius
+-- Distance entre le chemin et la voie que suivent les créatures achetées pour
+-- rejoindre leur base (le trottoir). nil = ShopService la déduit de la position
+-- des entrées.
+function MapService.GetLaneOffset(): number?
+	return laneOffset
 end
 
 function MapService.GetPlots(): { PlotRecord }

@@ -14,13 +14,14 @@ local Widgets = require(script.Parent.Parent.Widgets)
 local LeaderboardPanel = {}
 LeaderboardPanel.Title = "Classement global"
 LeaderboardPanel.Icon = "🏆"
-LeaderboardPanel.Color = "Dark"
+LeaderboardPanel.Color = "Royal"
 
 local MEDALS = { "🥇", "🥈", "🥉" }
+-- Or, argent, bronze : assez soutenus pour que les noms blancs restent lisibles
 local MEDAL_COLORS = {
-	Color3.fromRGB(255, 200, 50),
-	Color3.fromRGB(200, 205, 225),
-	Color3.fromRGB(220, 140, 80),
+	Color3.fromRGB(255, 190, 0),
+	Color3.fromRGB(122, 142, 188),
+	Color3.fromRGB(214, 104, 30),
 }
 
 function LeaderboardPanel.Create(content: Frame, ctx)
@@ -28,12 +29,12 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 	local cached = nil
 	local self = {} :: any
 
-	local tabs = Widgets.Row({ Size = UDim2.new(1, 0, 0, 54), Parent = content }, 10)
+	local tabs = Widgets.Row({ Size = UDim2.new(1, 0, 0, 56), Parent = content }, 10)
 	local moneyTab = UIKit.Button({
-		Text = "💰 Argent total",
+		Text = "💰 ARGENT TOTAL",
 		Color = "Green",
-		TextSize = 20,
-		Size = UDim2.new(0.5, -5, 0, 52),
+		TextSize = 21,
+		Size = UDim2.new(0.5, -5, 0, 54),
 		LayoutOrder = 1,
 		Parent = tabs,
 		OnClick = function()
@@ -42,10 +43,10 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 		end,
 	})
 	local stealsTab = UIKit.Button({
-		Text = "🦹 Vols réussis",
+		Text = "🦹 VOLS RÉUSSIS",
 		Color = "Dark",
-		TextSize = 20,
-		Size = UDim2.new(0.5, -5, 0, 52),
+		TextSize = 21,
+		Size = UDim2.new(0.5, -5, 0, 54),
 		LayoutOrder = 2,
 		Parent = tabs,
 		OnClick = function()
@@ -54,7 +55,7 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 		end,
 	})
 
-	local list = UIKit.ScrollList(content, { Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 1, -66) })
+	local list = UIKit.ScrollList(content, { Position = UDim2.fromOffset(0, 68), Size = UDim2.new(1, 0, 1, -68) })
 
 	function self.Refresh()
 		moneyTab:SetColor(if mode == "Money" then "Green" else "Dark")
@@ -68,9 +69,9 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 		for _, entry in entries do
 			local medalColor = MEDAL_COLORS[entry.Rank]
 			local card =
-				UIKit.Card({ Size = UDim2.new(1, 0, 0, 70), LayoutOrder = entry.Rank, Parent = list }, medalColor, 0.35)
+				UIKit.Card({ Size = UDim2.new(1, 0, 0, 72), LayoutOrder = entry.Rank, Parent = list }, medalColor)
 			if MEDALS[entry.Rank] then
-				UIKit.IconCircle(MEDALS[entry.Rank], medalColor, 52, {
+				UIKit.IconCircle(MEDALS[entry.Rank], medalColor, 54, {
 					AnchorPoint = Vector2.new(0, 0.5),
 					Position = UDim2.new(0, 10, 0.5, 0),
 					Parent = card,
@@ -78,38 +79,44 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 			else
 				UIKit.Text({
 					Text = "#" .. entry.Rank,
-					TextSize = 24,
+					TextSize = 26,
 					TextXAlignment = Enum.TextXAlignment.Center,
 					TextWrapped = false,
 					AnchorPoint = Vector2.new(0, 0.5),
 					Position = UDim2.new(0, 10, 0.5, 0),
-					Size = UDim2.fromOffset(52, 40),
+					Size = UDim2.fromOffset(54, 40),
+					Stroke = 3,
+					Fit = true,
 					Parent = card,
 				})
 			end
 			Widgets.Avatar(
 				entry.UserId,
-				50,
-				{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 74, 0.5, 0), Parent = card }
+				52,
+				{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 76, 0.5, 0), Parent = card }
 			)
-			UIKit.Text({
+			UIKit.Body({
 				Text = entry.Name,
-				TextSize = 21,
+				TextSize = 22,
+				TextColor3 = Theme.Text,
 				TextWrapped = false,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				Position = UDim2.fromOffset(136, 0),
-				Size = UDim2.new(1, -330, 1, 0),
+				Position = UDim2.fromOffset(140, 0),
+				Size = UDim2.new(1, -350, 1, 0),
+				Stroke = 2,
 				Parent = card,
 			})
 			UIKit.Text({
 				Text = if mode == "Money" then Format.Money(entry.Value) else "🦹 " .. tostring(entry.Value),
-				TextSize = 24,
-				TextColor3 = if mode == "Money" then Theme.Money else Color3.fromRGB(255, 160, 160),
+				TextSize = 27,
+				TextColor3 = if mode == "Money" then Theme.Money else Color3.fromRGB(255, 120, 120),
 				TextXAlignment = Enum.TextXAlignment.Right,
 				TextWrapped = false,
-				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, -16, 0, 0),
-				Size = UDim2.new(0, 190, 1, 0),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -16, 0.5, 0),
+				Size = UDim2.fromOffset(200, 36),
+				Stroke = 3,
+				Fit = true,
 				Parent = card,
 			})
 		end

@@ -29,6 +29,22 @@ local HUD = {}
 
 local player = Players.LocalPlayer
 
+-- Éléments repositionnés selon la taille de l'écran (voir HUD.ApplyLayout)
+local layoutRefs: {
+	LeftColumn: Frame?,
+	Menu: Frame?,
+	Rail: Frame?,
+	RailList: UIListLayout?,
+	RailGrid: UIGridLayout?,
+} =
+	{}
+
+-- Pile du bas de l'écran (barrière, bandeau de vol, vengeance)
+local BOTTOM_MARGIN = 12
+local BARRIER_HEIGHT = 74
+local STACK_GAP = 8
+local TILE = 84 -- côté des tuiles du menu et du rail
+
 local MENU = {
 	{ Panel = "Inventory", Text = "Créatures", Icon = "🐾", Color = "Blue" },
 	{ Panel = "Fusion", Text = "Fusion", Icon = "🌀", Color = "Purple" },
@@ -37,7 +53,7 @@ local MENU = {
 	{ Panel = "Quests", Text = "Quêtes", Icon = "📜", Color = "Gold" },
 	{ Panel = "Rebirth", Text = "Rebirth", Icon = "🔁", Color = "Pink" },
 	{ Panel = "Shortcut", Text = "Portail", Icon = "🌠", Color = "Cyan" },
-	{ Panel = "Leaderboard", Text = "Top", Icon = "🏆", Color = "Dark" },
+	{ Panel = "Leaderboard", Text = "Top", Icon = "🏆", Color = "Royal" },
 	{ Panel = "Shop", Text = "Boutique", Icon = "🛒", Color = "Green" },
 }
 
@@ -100,123 +116,152 @@ function HUD.Create(root: Frame, ctx)
 	local State = ctx.State
 	local Panels = ctx.UI.Panels
 
-	-------------------------------------------------- Argent
+	-------------------------------------------------- Argent (gros chiffre vert, contour noir)
+	-- Colonne de gauche : descend sous les boutons Roblox du haut (HUD.ApplyLayout)
+	local leftColumn = UIKit.New("Frame", {
+		Name = "LeftColumn",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0, 10),
+		Size = UDim2.fromOffset(440, 176),
+		Parent = root,
+	})
 	local moneyHolder = UIKit.New("Frame", {
 		Name = "Money",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(18, 16),
-		Size = UDim2.fromOffset(300, 80),
-		Parent = root,
+		Position = UDim2.fromOffset(10, 0),
+		Size = UDim2.fromOffset(410, 92),
+		Parent = leftColumn,
 	})
-	local moneyCapsule = UIKit.New("Frame", {
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Position = UDim2.fromOffset(34, 8),
-		Size = UDim2.new(1, -34, 0, 64),
+	UIKit.Text({
+		Name = "Icon",
+		Text = "💵",
+		TextSize = 46,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(0, 2),
+		Size = UDim2.fromOffset(60, 58),
+		Stroke = 0,
 		Parent = moneyHolder,
 	})
-	UIKit.Round(moneyCapsule)
-	UIKit.Stroke(moneyCapsule, 3.5)
-	UIKit.Gradient(moneyCapsule, Color3.fromRGB(78, 64, 150), Color3.fromRGB(40, 30, 90))
-	UIKit.IconCircle("💰", Theme.Gold, 80, { Parent = moneyHolder, ZIndex = 3 })
 	local moneyLabel = UIKit.Text({
 		Name = "Amount",
 		Text = "$0",
-		TextSize = 34,
+		TextSize = 48,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(54, 2),
-		Size = UDim2.new(1, -66, 0, 38),
-		Stroke = 3,
-		Parent = moneyCapsule,
+		Position = UDim2.fromOffset(64, 0),
+		Size = UDim2.new(1, -64, 0, 56),
+		Stroke = 5,
+		Fit = true,
+		Parent = moneyHolder,
 	})
-	UIKit.Gradient(moneyLabel, Color3.fromRGB(220, 255, 210), Color3.fromRGB(90, 235, 90))
+	UIKit.Gradient(moneyLabel, Color3.fromRGB(200, 255, 190), Color3.fromRGB(70, 240, 80))
 	local incomeLabel = UIKit.Text({
 		Name = "Income",
 		Text = "+$0/s",
-		TextSize = 18,
-		TextColor3 = Theme.Gold,
+		TextSize = 24,
+		TextColor3 = Theme.Income,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(56, 36),
-		Size = UDim2.new(1, -66, 0, 22),
-		Parent = moneyCapsule,
+		Position = UDim2.fromOffset(66, 54),
+		Size = UDim2.new(1, -66, 0, 30),
+		Stroke = 3.2,
+		Parent = moneyHolder,
 	})
 	local moneyScale = UIKit.New("UIScale", { Parent = moneyLabel })
 
-	-- Pastilles sous l'argent
+	-- Étiquettes sous l'argent
 	local statsRow = UIKit.New("Frame", {
+		Name = "Stats",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(52, 100),
+		Position = UDim2.fromOffset(14, 96),
 		Size = UDim2.fromOffset(420, 30),
-		Parent = root,
+		Parent = leftColumn,
 	})
 	UIKit.List(statsRow, Enum.FillDirection.Horizontal, 8)
-	local rebirthPill =
-		UIKit.Pill("🔁 Rebirth 0", Color3.fromRGB(230, 90, 190), { Parent = statsRow, LayoutOrder = 1 })
-	local stealsPill = UIKit.Pill("🦹 Vols 0", Color3.fromRGB(90, 140, 255), { Parent = statsRow, LayoutOrder = 2 })
+	local rebirthPill = UIKit.Pill(
+		"🔁 Rebirth 0",
+		Color3.fromRGB(255, 70, 180),
+		{ Parent = statsRow, LayoutOrder = 1, Size = UDim2.fromOffset(0, 30), TextSize = 16 }
+	)
+	local stealsPill = UIKit.Pill(
+		"🦹 Vols 0",
+		Theme.Danger,
+		{ Parent = statsRow, LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), TextSize = 16 }
+	)
 	local boostRow = UIKit.New("Frame", {
+		Name = "Boosts",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(52, 134),
+		Position = UDim2.fromOffset(14, 134),
 		Size = UDim2.fromOffset(420, 30),
-		Parent = root,
+		Parent = leftColumn,
 	})
 	UIKit.List(boostRow, Enum.FillDirection.Horizontal, 8)
-	local friendsPill =
-		UIKit.Pill("👥 +0%", Color3.fromRGB(60, 190, 90), { Parent = boostRow, LayoutOrder = 1, Visible = false })
-	local boostPill =
-		UIKit.Pill("⚡ x2", Color3.fromRGB(255, 150, 40), { Parent = boostRow, LayoutOrder = 2, Visible = false })
+	local friendsPill = UIKit.Pill(
+		"👥 +0%",
+		Theme.Info,
+		{ Parent = boostRow, LayoutOrder = 1, Size = UDim2.fromOffset(0, 30), TextSize = 16, Visible = false }
+	)
+	local boostPill = UIKit.Pill(
+		"💸 x2",
+		Color3.fromRGB(40, 200, 60),
+		{ Parent = boostRow, LayoutOrder = 2, Size = UDim2.fromOffset(0, 30), TextSize = 16, Visible = false }
+	)
 
-	-------------------------------------------------- Dimension
+	-------------------------------------------------- Dimension (bandeau du haut)
 	local dimHolder = UIKit.New("Frame", {
 		Name = "Dimension",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 14),
-		Size = UDim2.fromOffset(400, 136),
+		Position = UDim2.new(0.5, 0, 0, 4),
+		Size = UDim2.fromOffset(430, 146),
 		Parent = root,
 	})
-	local dimCard = UIKit.New("Frame", {
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Position = UDim2.fromOffset(30, 6),
-		Size = UDim2.new(1, -30, 0, 84),
+	local lavaColor = Color3.fromRGB(255, 110, 30)
+	local dimPlate = UIKit.Plate({
+		Position = UDim2.fromOffset(38, 8),
+		Size = UDim2.new(1, -38, 0, 92),
 		Parent = dimHolder,
-	})
-	UIKit.Corner(dimCard, 22)
-	UIKit.Stroke(dimCard, 3.5)
-	local dimGradient = UIKit.Gradient(dimCard, Color3.fromRGB(255, 140, 70), Color3.fromRGB(150, 40, 20))
-	local dimIcon = UIKit.IconCircle("🔥", Color3.fromRGB(255, 120, 40), 88, { Parent = dimHolder, ZIndex = 3 })
+	}, Theme.PaletteFrom(lavaColor), 6, 18)
+	local dimIcon = UIKit.IconCircle("🔥", lavaColor, 98, { Parent = dimHolder, ZIndex = 5 })
 	local dimTitle = UIKit.Text({
+		Name = "Title",
 		Text = "DIMENSION LAVE",
-		TextSize = 26,
+		TextSize = 30,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(66, 6),
-		Size = UDim2.new(1, -78, 0, 30),
-		Stroke = 3,
-		Parent = dimCard,
+		Position = UDim2.fromOffset(68, 5),
+		Size = UDim2.new(1, -80, 0, 36),
+		Stroke = 3.6,
+		Fit = true,
+		ZIndex = 3,
+		Parent = dimPlate.Face,
 	})
+	-- Barre du temps restant : remplie de la couleur de la PROCHAINE dimension
 	local dimTimer = UIKit.ProgressBar({
-		Position = UDim2.fromOffset(66, 42),
-		Size = UDim2.new(1, -82, 0, 28),
-		Parent = dimCard,
-	}, Color3.fromRGB(255, 255, 255))
-	-- Chance + tempête sous la carte
+		Position = UDim2.fromOffset(68, 44),
+		Size = UDim2.new(1, -84, 0, 30),
+		ZIndex = 3,
+		Parent = dimPlate.Face,
+	}, Theme.Gold)
+	-- Chance + tempête sous le bandeau
 	local eventRow = UIKit.New("Frame", {
+		Name = "Events",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(30, 98),
-		Size = UDim2.new(1, -30, 0, 32),
+		Position = UDim2.fromOffset(38, 108),
+		Size = UDim2.new(1, -38, 0, 34),
 		Parent = dimHolder,
 	})
 	UIKit.List(eventRow, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
-	local luckPill = UIKit.Pill("🍀 Chance x2", Color3.fromRGB(80, 210, 90), {
+	local luckPill = UIKit.Pill("🍀 Chance x2", Color3.fromRGB(40, 200, 60), {
 		Parent = eventRow,
 		LayoutOrder = 1,
-		Size = UDim2.fromOffset(0, 30),
-		TextSize = 16,
+		Size = UDim2.fromOffset(0, 32),
+		TextSize = 17,
 		Visible = false,
 	})
-	local stormPill = UIKit.Pill("🌪️ Tempête", Color3.fromRGB(255, 80, 150), {
+	local stormPill = UIKit.Pill("🌪️ Tempête", Theme.Magic, {
 		Parent = eventRow,
 		LayoutOrder = 2,
-		Size = UDim2.fromOffset(0, 30),
-		TextSize = 16,
+		Size = UDim2.fromOffset(0, 32),
+		TextSize = 17,
 		Visible = false,
 	})
 	local stormScale = UIKit.New("UIScale", { Parent = stormPill })
@@ -226,13 +271,13 @@ function HUD.Create(root: Frame, ctx)
 		Name = "Menu",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 18, 0.5, 70),
-		Size = UDim2.fromOffset(176, 456),
+		Position = UDim2.new(0, 14, 0.5, 72),
+		Size = UDim2.fromOffset(180, 452),
 		Parent = root,
 	})
 	UIKit.New("UIGridLayout", {
-		CellSize = UDim2.fromOffset(82, 84),
-		CellPadding = UDim2.fromOffset(10, 8),
+		CellSize = UDim2.fromOffset(TILE, TILE),
+		CellPadding = UDim2.fromOffset(12, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = menu,
 	})
@@ -257,11 +302,17 @@ function HUD.Create(root: Frame, ctx)
 		Name = "Rail",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -18, 0.5, -30),
-		Size = UDim2.fromOffset(82, 4 * 92),
+		Position = UDim2.new(1, -14, 0.5, 10),
+		Size = UDim2.fromOffset(TILE, 4 * TILE + 3 * 10),
 		Parent = root,
 	})
-	UIKit.List(rail, Enum.FillDirection.Vertical, 8)
+	-- Colonne sur grand écran ; grille 2 x 2 en mode compact (HUD.ApplyLayout)
+	layoutRefs.RailList = UIKit.List(rail, Enum.FillDirection.Vertical, 10)
+	layoutRefs.RailGrid = UIKit.New("UIGridLayout", {
+		CellSize = UDim2.fromOffset(TILE, TILE),
+		CellPadding = UDim2.fromOffset(10, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	})
 	local railButtons = {}
 	for order, item in RAIL do
 		local button = UIKit.IconButton({
@@ -269,7 +320,7 @@ function HUD.Create(root: Frame, ctx)
 			Icon = item.Icon,
 			Text = item.Text,
 			Color = item.Color,
-			Size = UDim2.fromOffset(82, 84),
+			Size = UDim2.fromOffset(TILE, TILE),
 			LayoutOrder = order,
 			Parent = rail,
 			OnClick = function()
@@ -283,22 +334,35 @@ function HUD.Create(root: Frame, ctx)
 		railButtons[item.Id] = button
 		badges[item.Id] = UIKit.Badge(button)
 	end
+	layoutRefs.LeftColumn = leftColumn
+	layoutRefs.Menu = menu
+	layoutRefs.Rail = rail
 	local giftCaption = railButtons.Gifts.Face:FindFirstChild("Caption", true) :: TextLabel
-	local inviteBadge = badges.Invite;
-	(inviteBadge:FindFirstChild("Text") :: TextLabel).Text =
-		string.format("+%d%%", math.round(GameConfig.Social.FriendBonusPerFriend * 100))
-	inviteBadge.Size = UDim2.fromOffset(52, 26)
+	local inviteBadge = badges.Invite
+	local inviteText = inviteBadge:FindFirstChild("Text") :: TextLabel
+	inviteText.Text = string.format("+%d%%", math.round(GameConfig.Social.FriendBonusPerFriend * 100))
+	inviteText.TextSize = 15
+	inviteBadge.Size = UDim2.fromOffset(54, 26)
+	inviteBadge.Position = UDim2.new(1, -14, 0, 4)
+	inviteBadge:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 8)
+	local inviteGradient = inviteBadge:FindFirstChildOfClass("UIGradient")
+	if inviteGradient then
+		inviteGradient.Color = ColorSequence.new(Color3.fromRGB(255, 236, 80), Color3.fromRGB(252, 166, 0))
+	end
 	inviteBadge.Visible = true
 
-	-------------------------------------------------- Barrière
+	-------------------------------------------------- Bas de l'écran
+	-- Empilés de bas en haut, sans trou (voir stackBottom) : barrière, bandeau de vol,
+	-- vengeance. Compacts pour laisser voir l'avatar.
 	local barrier = UIKit.Button({
 		Name = "Barrier",
 		Text = "🛡️ ACTIVER LA BARRIÈRE",
 		Color = "Red",
-		TextSize = 22,
+		TextSize = 25,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -18),
-		Size = UDim2.fromOffset(340, 68),
+		Position = UDim2.new(0.5, 0, 1, -BOTTOM_MARGIN),
+		Size = UDim2.fromOffset(380, BARRIER_HEIGHT),
+		Radius = 16,
 		Parent = root,
 		OnClick = function()
 			ctx.Net.Request("ActivateBarrier")
@@ -307,34 +371,72 @@ function HUD.Create(root: Frame, ctx)
 	local cooldownFill = UIKit.New("Frame", {
 		Name = "Cooldown",
 		BackgroundColor3 = Color3.new(0, 0, 0),
-		BackgroundTransparency = 0.6,
+		BackgroundTransparency = 0.55,
 		Size = UDim2.fromScale(0, 1),
 		ZIndex = barrier.Label.ZIndex - 1,
 		Parent = barrier.Face,
 	})
-	UIKit.Corner(cooldownFill, 14)
+	UIKit.Corner(cooldownFill, 16)
 
-	-------------------------------------------------- Bandeau de vol
-	local carryBanner = UIKit.New("Frame", {
+	-------------------------------------------------- Bandeau de vol (titre + détail + chrono)
+	local carryPlate = UIKit.Plate({
 		Name = "CarryBanner",
-		BackgroundColor3 = Color3.new(1, 1, 1),
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -100),
-		Size = UDim2.fromOffset(580, 54),
+		Position = UDim2.new(0.5, 0, 1, -(BOTTOM_MARGIN + BARRIER_HEIGHT + STACK_GAP)),
+		Size = UDim2.fromOffset(440, 64),
 		Visible = false,
 		Parent = root,
-	})
-	UIKit.Round(carryBanner)
-	UIKit.Stroke(carryBanner, 3.5)
-	local carryGradient = UIKit.Gradient(carryBanner, Color3.fromRGB(255, 110, 110), Color3.fromRGB(190, 30, 50))
-	local carryText = UIKit.Text({
+	}, "Red", 5, 16)
+	local carryBanner = carryPlate.Instance
+	local carryTitle = UIKit.Text({
+		Name = "Text",
 		Text = "",
-		TextSize = 21,
+		TextSize = 23,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(16, 3),
+		Size = UDim2.new(1, -118, 0, 30),
+		Stroke = 3,
+		Fit = true,
+		ZIndex = 3,
+		Parent = carryPlate.Face,
+	})
+	local carrySub = UIKit.Body({
+		Name = "Sub",
+		Text = "",
+		TextSize = 16,
+		TextColor3 = Theme.Text,
+		TextWrapped = false,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Position = UDim2.fromOffset(18, 32),
+		Size = UDim2.new(1, -120, 0, 20),
+		Stroke = 1.8,
+		ZIndex = 3,
+		Parent = carryPlate.Face,
+	})
+	-- Chrono dans un encart sombre : le chiffre qui compte se lit d'un coup d'œil
+	local carryChip = UIKit.New("Frame", {
+		Name = "Timer",
+		BackgroundColor3 = Theme.Inset,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -10, 0.5, 0),
+		Size = UDim2.fromOffset(88, 44),
+		ZIndex = 3,
+		Parent = carryPlate.Face,
+	})
+	UIKit.Corner(carryChip, 10)
+	UIKit.Stroke(carryChip, 3)
+	local carryTime = UIKit.Text({
+		Text = "0:00",
+		TextSize = 27,
+		TextColor3 = Theme.Gold,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		Size = UDim2.fromScale(1, 1),
-		Stroke = 2.5,
-		Parent = carryBanner,
+		Position = UDim2.fromOffset(4, 0),
+		Size = UDim2.new(1, -8, 1, 0),
+		Stroke = 3,
+		Fit = true,
+		ZIndex = 4,
+		Parent = carryChip,
 	})
 	local carryScale = UIKit.New("UIScale", { Parent = carryBanner })
 
@@ -342,12 +444,13 @@ function HUD.Create(root: Frame, ctx)
 	local revengeTarget: number? = nil
 	local revenge = UIKit.Button({
 		Name = "Revenge",
-		Text = "⚔️ VENGEANCE",
-		Color = "Red",
-		TextSize = 22,
+		Text = "⚔️ VENGEANCE !",
+		Color = "Orange",
+		TextSize = 24,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -164),
-		Size = UDim2.fromOffset(460, 66),
+		Position = UDim2.new(0.5, 0, 1, -(BOTTOM_MARGIN + BARRIER_HEIGHT + STACK_GAP)),
+		Size = UDim2.fromOffset(340, 68),
+		Radius = 16,
 		Parent = root,
 		OnClick = function()
 			if revengeTarget then
@@ -355,8 +458,34 @@ function HUD.Create(root: Frame, ctx)
 			end
 		end,
 	})
+	revenge.Label.Position = UDim2.new(0.5, 0, 0.5, -9)
+	local revengeSub = UIKit.Text({
+		Name = "Sub",
+		Text = "",
+		TextSize = 16,
+		TextColor3 = Color3.fromRGB(255, 240, 120),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 15),
+		Size = UDim2.new(1, -20, 0, 20),
+		Stroke = 2.2,
+		Fit = true,
+		ZIndex = revenge.Label.ZIndex,
+		Parent = revenge.Face,
+	})
 	revenge.Instance.Visible = false
 	local revengeScale = revenge.Instance:FindFirstChildOfClass("UIScale") :: UIScale
+
+	-- Empile les éléments visibles au-dessus de la barrière (pas de vide entre eux)
+	local function stackBottom()
+		local offset = BOTTOM_MARGIN + BARRIER_HEIGHT + STACK_GAP
+		if carryBanner.Visible then
+			carryBanner.Position = UDim2.new(0.5, 0, 1, -offset)
+			offset += carryBanner.Size.Y.Offset + STACK_GAP
+		end
+		revenge.Instance.Position = UDim2.new(0.5, 0, 1, -offset)
+	end
 
 	-------------------------------------------------- Mises à jour
 	local lastMoney = State.GetMoney()
@@ -383,8 +512,7 @@ function HUD.Create(root: Frame, ctx)
 		pillText(stealsPill).Text = "🦹 Vols " .. profile.Stats.Steals
 		local friends = profile.FriendCount or 0
 		friendsPill.Visible = friends > 0
-		pillText(friendsPill).Text =
-			string.format("👥 %d ami(s) +%d%%", friends, math.round(Economy.GetFriendBonus(friends) * 100))
+		pillText(friendsPill).Text = string.format("👥 Amis +%d%%", math.round(Economy.GetFriendBonus(friends) * 100))
 	end
 	State.ProfileChanged:Connect(refreshStats)
 	refreshStats()
@@ -400,21 +528,21 @@ function HUD.Create(root: Frame, ctx)
 		if stateFolder then
 			local dimension = Dimensions.Get(State.GetDimension())
 			if dimension then
+				local nextDimension = Dimensions.Get(Dimensions.Next(dimension.Id))
 				if dimension.Id ~= currentDimension then
 					currentDimension = dimension.Id
-					local color = dimension.Visual.RiftColor
-					dimGradient.Color = ColorSequence.new(Theme.Lighten(color, 0.15), Theme.Darken(color, 0.5))
+					local vivid = Theme.Vivid(dimension.Visual.RiftColor)
+					dimPlate:SetColor(Theme.PaletteFrom(vivid))
 					dimTitle.Text = "DIMENSION " .. Format.Upper(dimension.Name)
 					local glyph = dimIcon:FindFirstChild("Glyph") :: TextLabel
 					glyph.Text = Theme.DimensionIcons[dimension.Id] or "🌀"
 					local iconGradient = dimIcon:FindFirstChildOfClass("UIGradient")
 					if iconGradient then
-						iconGradient.Color = ColorSequence.new(Theme.Lighten(color, 0.4), Theme.Darken(color, 0.1))
+						iconGradient.Color = ColorSequence.new(Theme.Lighten(vivid, 0.25), Theme.Darken(vivid, 0.1))
 					end
-					dimTimer:SetColor(Theme.Lighten(color, 0.3))
+					dimTimer:SetColor(if nextDimension then Theme.Vivid(nextDimension.Visual.RiftColor) else Theme.Gold)
 					UIKit.Pop(dimHolder)
 				end
-				local nextDimension = Dimensions.Get(Dimensions.Next(dimension.Id))
 				local endsAt = stateFolder:GetAttribute("DimensionEndsAt") or now
 				local left = math.max(0, endsAt - now)
 				dimTimer:SetProgress(left / GameConfig.Rift.DimensionDurationSeconds)
@@ -454,7 +582,7 @@ function HUD.Create(root: Frame, ctx)
 		boostPill.Visible = boostLeft > 0
 		if boostLeft > 0 then
 			pillText(boostPill).Text =
-				string.format("⚡ Argent x%d • %s", GameConfig.Boosts.MoneyMultiplier, Format.Time(boostLeft))
+				string.format("💸 x%d • %s", GameConfig.Boosts.MoneyMultiplier, Format.Time(boostLeft))
 		end
 
 		-- Pastilles rouges et compte à rebours des cadeaux
@@ -501,17 +629,26 @@ function HUD.Create(root: Frame, ctx)
 			local def = Creatures.Get(profile.Carrying.CreatureId)
 			local left = (profile.Carrying.SecondsLeft or 0) - sinceSync
 			carryBanner.Visible = true
-			carryGradient.Color = ColorSequence.new(Color3.fromRGB(130, 245, 120), Color3.fromRGB(30, 150, 60))
-			carryText.Text = string.format(
-				"🏃 Rapporte %s dans ta base ! %s",
-				if def then def.Name else "ta prise",
-				Format.Time(left)
-			)
+			carryPlate:SetColor("Green")
+			carryTitle.Text = "🏃 Ramène-la à ta base !"
+			carrySub.Text = if def then def.Name else "Ta prise"
+			carryTime.Text = Format.Time(left)
+			carryChip.Visible = true
+			carryTitle.Size = UDim2.new(1, -118, 0, 30)
+			carrySub.Size = UDim2.new(1, -120, 0, 20)
+			carryTitle.TextXAlignment = Enum.TextXAlignment.Left
+			carrySub.TextXAlignment = Enum.TextXAlignment.Left
 			carryScale.Scale = 1 + math.abs(math.sin(os.clock() * 4)) * 0.03
 		elseif profile and profile.BeingStolen and #profile.BeingStolen > 0 then
 			carryBanner.Visible = true
-			carryGradient.Color = ColorSequence.new(Color3.fromRGB(255, 110, 110), Color3.fromRGB(190, 30, 50))
-			carryText.Text = "🚨 ON TE VOLE ! Touche le voleur pour récupérer ta créature !"
+			carryPlate:SetColor("Red")
+			carryTitle.Text = "🚨 On te vole !"
+			carrySub.Text = "Touche le voleur pour récupérer ta créature !"
+			carryChip.Visible = false
+			carryTitle.Size = UDim2.new(1, -32, 0, 30)
+			carrySub.Size = UDim2.new(1, -36, 0, 20)
+			carryTitle.TextXAlignment = Enum.TextXAlignment.Center
+			carrySub.TextXAlignment = Enum.TextXAlignment.Center
 			carryScale.Scale = 1 + math.abs(math.sin(os.clock() * 6)) * 0.05
 		else
 			carryBanner.Visible = false
@@ -523,18 +660,14 @@ function HUD.Create(root: Frame, ctx)
 		if revengeInfo and revengeLeft > 0 then
 			revengeTarget = revengeInfo.ThiefUserId
 			revenge.Instance.Visible = true
-			revenge:SetText(
-				string.format(
-					"⚔️ VENGEANCE sur %s (gratuit) • %s",
-					revengeInfo.ThiefName,
-					Format.Time(revengeLeft)
-				)
-			)
+			revengeSub.Text =
+				string.format("sur %s • gratuit • %s", revengeInfo.ThiefName, Format.Time(revengeLeft))
 			revengeScale.Scale = 1 + math.abs(math.sin(os.clock() * 4)) * 0.05
 		else
 			revengeTarget = nil
 			revenge.Instance.Visible = false
 		end
+		stackBottom()
 	end
 
 	local accumulator = 0
@@ -546,6 +679,42 @@ function HUD.Create(root: Frame, ctx)
 		end
 	end)
 	update()
+end
+
+--[[
+	Disposition selon l'écran (appelée par l'UIController) :
+	  Compact    : écran peu haut (téléphone en paysage) -> menu en 3 colonnes sous
+	               l'argent, rail de récompenses en grille 2 x 2 en haut à droite, sous
+	               le fil d'actualité (le coin bas droit reste libre pour le bouton de
+	               saut tactile de Roblox)
+	  LeftOffset : décalage vertical de la colonne de gauche (barre Roblox du haut)
+]]
+function HUD.ApplyLayout(info: { Compact: boolean, LeftOffset: number })
+	local leftColumn, menu, rail = layoutRefs.LeftColumn, layoutRefs.Menu, layoutRefs.Rail
+	local railList, railGrid = layoutRefs.RailList, layoutRefs.RailGrid
+	if not leftColumn or not menu or not rail or not railList or not railGrid then
+		return
+	end
+	leftColumn.Position = UDim2.fromOffset(0, info.LeftOffset)
+	if info.Compact then
+		menu.AnchorPoint = Vector2.zero
+		menu.Position = UDim2.fromOffset(14, info.LeftOffset + 176)
+		menu.Size = UDim2.fromOffset(3 * TILE + 2 * 12, 3 * TILE + 2 * 8)
+		railList.Parent = nil
+		railGrid.Parent = rail
+		rail.AnchorPoint = Vector2.new(1, 0)
+		rail.Position = UDim2.new(1, -14, 0, 200)
+		rail.Size = UDim2.fromOffset(2 * TILE + 10, 2 * TILE + 10)
+	else
+		menu.AnchorPoint = Vector2.new(0, 0.5)
+		menu.Position = UDim2.new(0, 14, 0.5, 66 + info.LeftOffset)
+		menu.Size = UDim2.fromOffset(2 * TILE + 12, 5 * TILE + 4 * 8)
+		railGrid.Parent = nil
+		railList.Parent = rail
+		rail.AnchorPoint = Vector2.new(1, 0.5)
+		rail.Position = UDim2.new(1, -14, 0.5, 10)
+		rail.Size = UDim2.fromOffset(TILE, 4 * TILE + 3 * 10)
+	end
 end
 
 return HUD

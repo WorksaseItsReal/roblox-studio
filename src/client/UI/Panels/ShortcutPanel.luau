@@ -26,15 +26,18 @@ function ShortcutPanel.Create(content: Frame, ctx)
 	UIKit.IconCircle(
 		"🌠",
 		CYAN,
-		120,
-		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Parent = locked }
+		124,
+		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Parent = locked }
 	)
 	UIKit.Text({
 		Text = "Téléporte-toi devant la base d'un adversaire !",
-		TextSize = 24,
+		TextSize = 26,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(20, 146),
-		Size = UDim2.new(1, -40, 0, 32),
+		TextWrapped = false,
+		Position = UDim2.fromOffset(10, 144),
+		Size = UDim2.new(1, -20, 0, 36),
+		Stroke = 3,
+		Fit = true,
 		Parent = locked,
 	})
 	UIKit.Body({
@@ -43,19 +46,20 @@ function ShortcutPanel.Create(content: Frame, ctx)
 			Format.Money(GameConfig.Shortcut.UseCostBase),
 			Format.Time(GameConfig.Shortcut.Cooldown)
 		),
-		TextSize = 16,
+		TextSize = 17,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(60, 184),
+		Position = UDim2.fromOffset(60, 186),
 		Size = UDim2.new(1, -120, 0, 48),
 		Parent = locked,
 	})
 	local unlockButton = UIKit.Button({
 		Text = "🔓 DÉBLOQUER • " .. Format.Money(GameConfig.Shortcut.UnlockCost),
-		Color = "Cyan",
-		TextSize = 24,
+		Color = "Green",
+		TextSize = 26,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 256),
-		Size = UDim2.fromOffset(400, 74),
+		Position = UDim2.new(0.5, 0, 0, 258),
+		Size = UDim2.fromOffset(430, 80),
+		Radius = 16,
 		Parent = locked,
 		OnClick = function()
 			ctx.Net.Request("UnlockShortcut")
@@ -70,11 +74,14 @@ function ShortcutPanel.Create(content: Frame, ctx)
 	local top = Widgets.Row({ Size = UDim2.new(1, 0, 0, 40), Parent = unlocked }, 10)
 	local costPill = UIKit.Pill(
 		"💸 Coût",
-		Color3.fromRGB(60, 190, 90),
+		Color3.fromRGB(40, 200, 60),
 		{ Parent = top, LayoutOrder = 1, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
 	)
-	local cooldownPill =
-		UIKit.Pill("✅ Prêt", CYAN, { Parent = top, LayoutOrder = 2, Size = UDim2.fromOffset(0, 36), TextSize = 17 })
+	local cooldownPill = UIKit.Pill(
+		"✅ Prêt",
+		Theme.Info,
+		{ Parent = top, LayoutOrder = 2, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
+	)
 	local list = UIKit.ScrollList(unlocked, { Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 1, -52) })
 
 	local self = {} :: any
@@ -107,36 +114,40 @@ function ShortcutPanel.Create(content: Frame, ctx)
 		UIKit.ClearChildren(list)
 		table.clear(cards)
 		for index, other in others do
-			local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 82), LayoutOrder = index, Parent = list })
+			local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 84), LayoutOrder = index, Parent = list })
 			Widgets.Avatar(
 				other.UserId,
 				62,
 				{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Parent = card }
 			)
-			UIKit.Text({
+			UIKit.Body({
 				Text = other.DisplayName,
 				TextSize = 22,
+				TextColor3 = Theme.Text,
 				TextWrapped = false,
+				TextTruncate = Enum.TextTruncate.AtEnd,
 				Position = UDim2.fromOffset(88, 10),
-				Size = UDim2.new(1, -260, 0, 28),
+				Size = UDim2.new(1, -270, 0, 30),
+				Stroke = 2,
 				Parent = card,
 			})
 			local income = UIKit.Text({
 				Text = "",
-				TextSize = 17,
-				TextColor3 = Theme.Money,
+				TextSize = 19,
+				TextColor3 = Theme.Income,
 				TextWrapped = false,
 				Position = UDim2.fromOffset(88, 42),
-				Size = UDim2.new(1, -260, 0, 24),
+				Size = UDim2.new(1, -270, 0, 26),
+				Stroke = 2.2,
 				Parent = card,
 			})
 			local go = UIKit.Button({
-				Text = "🌀 Y aller",
+				Text = "🌀 Y ALLER",
 				Color = "Cyan",
-				TextSize = 19,
+				TextSize = 20,
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -12, 0.5, 0),
-				Size = UDim2.fromOffset(150, 54),
+				Size = UDim2.fromOffset(160, 58),
 				ZIndex = 2,
 				Parent = card,
 				OnClick = function()

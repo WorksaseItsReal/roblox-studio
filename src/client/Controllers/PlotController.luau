@@ -6,7 +6,9 @@
 	  simulé par le client, donc la collision locale suffit) ;
 	- affiche "Voler" seulement sur les bases des autres (et pas si leur barrière
 	  est active), "Gérer" / bouton de barrière / fusion seulement chez soi ;
-	- met à jour le panneau au-dessus de chaque entrée (propriétaire + timer).
+	- met à jour le grand panneau au-dessus de chaque entrée (« BASE DE {Nom} »
+	  + ligne d'état : verrouillée avec le temps restant, ou « TA BASE ») et
+	  l'étiquette du bouton de verrouillage (prêt / actif / recharge).
 ]]
 
 local Players = game:GetService("Players")
@@ -35,12 +37,25 @@ local function updatePrompt(prompt: ProximityPrompt, plot: Instance)
 	end
 end
 
+-- Étiquettes flottantes du bouton de verrouillage et du portail de fusion :
+-- utiles seulement au propriétaire
+local function refreshLabels(plot: Instance)
+	for _, name in { "LockButton", "FusionPortal" } do
+		local part = plot:FindFirstChild(name)
+		local label = part and part:FindFirstChild("Label")
+		if label and label:IsA("BillboardGui") then
+			label.Enabled = isMine(plot)
+		end
+	end
+end
+
 local function refreshPlot(plot: Instance)
 	for _, descendant in plot:GetDescendants() do
 		if descendant:IsA("ProximityPrompt") then
 			updatePrompt(descendant, plot)
 		end
 	end
+	refreshLabels(plot)
 	local barrier = plot:FindFirstChild("Barrier")
 	if barrier and barrier:IsA("BasePart") and isMine(plot) then
 		barrier.CanCollide = false
@@ -68,26 +83,91 @@ local function setupPlot(plot: Instance)
 	refreshPlot(plot)
 end
 
+local WHITE = Color3.new(1, 1, 1)
+local MUTED = Color3.fromRGB(205, 210, 222)
+local DANGER = Color3.fromRGB(255, 70, 70)
+local GOLD = Color3.fromRGB(255, 215, 40)
+-- Titre seul (pleine hauteur) ou titre + ligne d'état en dessous
+local TITLE_FULL = { UDim2.fromScale(0.03, 0.08), UDim2.fromScale(0.94, 0.84) }
+local TITLE_TOP = { UDim2.fromScale(0.03, 0.04), UDim2.fromScale(0.94, 0.6) }
+
+local function numberAttribute(instance: Instance, name: string, default: number): number
+	local value = instance:GetAttribute(name)
+	return if type(value) == "number" then value else default
+end
+
+local function setText(label: TextLabel, text: string, color: Color3)
+	if label.Text ~= text then
+		label.Text = text
+	end
+	if label.TextColor3 ~= color then
+		label.TextColor3 = color
+	end
+end
+
+local function updateSign(plot: Instance, now: number)
+	local sign = plot:FindFirstChild("Sign")
+	if not sign then
+		return
+	end
+	local ownerName = plot:GetAttribute("OwnerName") or ""
+	-- Tout en capitales (accents compris) : Luckiest Guy a de vraies minuscules, un
+	-- nom en casse mixte paraîtrait irrégulier à côté de « BASE DE »
+	local titleText, titleColor = "BASE DE " .. Format.Upper(ownerName), WHITE
+	local statusText, statusColor = "", WHITE
+	if ownerName == "" then
+		titleText, titleColor = "BASE LIBRE", MUTED
+	elseif plot:GetAttribute("BarrierActive") then
+		local left = numberAttribute(plot, "BarrierEndsAt", now) - now
+		statusText, statusColor = "🔒 VERROUILLÉE " .. Format.Time(left), DANGER
+	elseif isMine(plot) then
+		statusText, statusColor = "★ TA BASE ★", GOLD
+	end
+	-- Le panneau peut avoir une face avant (SignGui) et une face arrière
+	for _, gui in sign:GetChildren() do
+		local title = gui:IsA("SurfaceGui") and gui:FindFirstChild("Text", true)
+		if title and title:IsA("TextLabel") then
+			local status = gui:FindFirstChild("Status", true)
+			if status and status:IsA("TextLabel") then
+				setText(title, titleText, titleColor)
+				setText(status, statusText, statusColor)
+				local layout = if statusText == "" then TITLE_FULL else TITLE_TOP
+				title.Position = layout[1]
+				title.Size = layout[2]
+			elseif statusText ~= "" then
+				-- Panneau d'une map manuelle sans ligne d'état : l'état remplace le titre
+				setText(title, statusText, statusColor)
+			else
+				setText(title, titleText, titleColor)
+			end
+		end
+	end
+end
+
+local function updateLockLabel(plot: Instance, now: number)
+	local button = plot:FindFirstChild("LockButton")
+	local gui = button and button:FindFirstChild("Label")
+	local label = gui and gui:FindFirstChild("Text", true)
+	if not label or not label:IsA("TextLabel") then
+		return
+	end
+	if plot:GetAttribute("BarrierActive") then
+		setText(label, "🔒 " .. Format.Time(numberAttribute(plot, "BarrierEndsAt", now) - now), DANGER)
+		return
+	end
+	local cooldown = numberAttribute(plot, "BarrierCooldownEndsAt", 0) - now
+	if cooldown > 0 then
+		setText(label, "⏳ " .. Format.Time(cooldown), MUTED)
+	else
+		setText(label, "🔒 VERROUILLER", WHITE)
+	end
+end
+
 local function updateSigns(plots: Instance)
 	local now = workspace:GetServerTimeNow()
 	for _, plot in plots:GetChildren() do
-		local sign = plot:FindFirstChild("Sign")
-		local gui = sign and sign:FindFirstChild("SignGui")
-		local label = gui and gui:FindFirstChild("Text", true)
-		if label and label:IsA("TextLabel") then
-			local ownerName = plot:GetAttribute("OwnerName") or ""
-			if ownerName == "" then
-				label.Text = "Base libre"
-				label.TextColor3 = Color3.fromRGB(200, 200, 210)
-			elseif plot:GetAttribute("BarrierActive") then
-				local left = (plot:GetAttribute("BarrierEndsAt") or now) - now
-				label.Text = "🛡️ " .. ownerName .. " • " .. Format.Time(left)
-				label.TextColor3 = Color3.fromRGB(255, 120, 120)
-			else
-				label.Text = "🏰 Base de " .. ownerName
-				label.TextColor3 = if isMine(plot) then Color3.fromRGB(120, 255, 150) else Color3.new(1, 1, 1)
-			end
-		end
+		updateSign(plot, now)
+		updateLockLabel(plot, now)
 	end
 end
 

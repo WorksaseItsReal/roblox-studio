@@ -15,7 +15,7 @@ local UIKit = require(script.Parent.UIKit)
 
 local Feed = {}
 
-local MAX_ENTRIES = 4
+local MAX_ENTRIES = 3
 local LIFETIME = 9
 
 local holder: Frame
@@ -23,43 +23,55 @@ local counter = 0
 
 function Feed.Push(text: string, color: Color3, icon: string)
 	counter += 1
+	-- Hauteur automatique : une ligne, ou deux si le message est long (jamais coupé
+	-- au milieu d'un nom)
 	local entry = UIKit.New("Frame", {
 		Name = "Entry",
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.1,
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 36),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		LayoutOrder = -counter,
 		Parent = holder,
 	})
-	UIKit.Round(entry)
-	UIKit.Stroke(entry, 2.5)
-	UIKit.Gradient(entry, Color3.fromRGB(70, 56, 140), Color3.fromRGB(38, 28, 84))
-	-- Liseré coloré à gauche
+	UIKit.Corner(entry, 10)
+	local entryStroke = UIKit.Stroke(entry, 2.5)
+	UIKit.Gradient(entry, Color3.fromRGB(40, 104, 220), Color3.fromRGB(18, 52, 140))
+	-- Pastille carrée de la couleur de l'événement, avec son icône
 	local accent = UIKit.New("Frame", {
+		Name = "Accent",
 		BackgroundColor3 = color,
-		Position = UDim2.fromOffset(6, 6),
-		Size = UDim2.fromOffset(22, 22),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 6, 0.5, 0),
+		Size = UDim2.fromOffset(26, 26),
 		Parent = entry,
 	})
-	UIKit.Round(accent)
-	UIKit.Text({
+	UIKit.Corner(accent, 7)
+	local accentStroke = UIKit.Stroke(accent, 2)
+	local iconLabel = UIKit.Text({
 		Text = icon,
-		TextSize = 14,
+		TextSize = 16,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
 		Stroke = 0,
 		Parent = accent,
 	})
-	local label = UIKit.Text({
+	local label = UIKit.Body({
 		Text = text,
-		TextSize = 15,
-		TextWrapped = false,
+		TextSize = 16,
+		TextColor3 = Theme.Text,
+		TextWrapped = true,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		Position = UDim2.fromOffset(34, 0),
-		Size = UDim2.new(1, -44, 1, 0),
+		Position = UDim2.fromOffset(40, 0),
+		Size = UDim2.new(1, -48, 0, 36),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Stroke = 1.5,
 		Parent = entry,
 	})
+	UIKit.Padding(label, 7, 0, 7, 0)
+	-- Deux lignes au maximum
+	UIKit.New("UISizeConstraint", { MaxSize = Vector2.new(10000, 56), Parent = label })
+	local labelStroke = label:FindFirstChildOfClass("UIStroke")
 	UIKit.Pop(entry, 0.6)
 
 	local entries = {}
@@ -77,8 +89,17 @@ function Feed.Push(text: string, color: Color3, icon: string)
 
 	task.delay(LIFETIME, function()
 		if entry.Parent then
-			TweenService:Create(entry, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
-			TweenService:Create(label, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+			local fade = TweenInfo.new(0.4)
+			-- Tout s'efface ensemble (fond, contours, icône, texte)
+			TweenService:Create(entry, fade, { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(entryStroke, fade, { Transparency = 1 }):Play()
+			TweenService:Create(accent, fade, { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(accentStroke, fade, { Transparency = 1 }):Play()
+			TweenService:Create(iconLabel, fade, { TextTransparency = 1 }):Play()
+			TweenService:Create(label, fade, { TextTransparency = 1 }):Play()
+			if labelStroke then
+				TweenService:Create(labelStroke, fade, { Transparency = 1 }):Play()
+			end
 			task.wait(0.4)
 			entry:Destroy()
 		end
@@ -94,8 +115,8 @@ function Feed.Create(root: Frame)
 		Name = "Feed",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -18, 0, 14),
-		Size = UDim2.fromOffset(360, 170),
+		Position = UDim2.new(1, -14, 0, 8),
+		Size = UDim2.fromOffset(380, 170),
 		ZIndex = 10,
 		Parent = root,
 	})

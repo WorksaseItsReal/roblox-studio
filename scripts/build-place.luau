@@ -65,10 +65,11 @@ if existing then
 end
 local map = MapBuilder.Build(workspace)
 
--- Ambiance par défaut (le client l'ajuste ensuite selon la dimension)
+-- Ambiance par défaut : plein jour franc, couleurs vives (docs/ART_DIRECTION.md).
+-- Le client (RiftVisualController) n'y ajoute qu'une légère teinte par dimension.
 local lighting = game:GetService("Lighting")
-lighting.ClockTime = 14.5
-lighting.Brightness = 2.6
+lighting.ClockTime = 13
+lighting.Brightness = 3
 lighting.GlobalShadows = true
 -- "Future" : éclairage le plus beau (lumières dynamiques, néons). Roblox réduit
 -- automatiquement la qualité sur les appareils modestes.
@@ -76,9 +77,10 @@ pcall(function()
 	lighting.Technology = roblox.Enum.Technology.Future
 end)
 lighting.EnvironmentDiffuseScale = 1
-lighting.EnvironmentSpecularScale = 1
-lighting.Ambient = roblox.Color3.fromRGB(110, 90, 80)
-lighting.OutdoorAmbient = roblox.Color3.fromRGB(170, 160, 175)
+-- Reflets du ciel atténués : les plastiques lisses gardent leur couleur franche
+lighting.EnvironmentSpecularScale = 0.5
+lighting.Ambient = roblox.Color3.fromRGB(112, 98, 92)
+lighting.OutdoorAmbient = roblox.Color3.fromRGB(162, 153, 149)
 local function effect(className, name, props)
 	local existing = lighting:FindFirstChild(name)
 	if existing then
@@ -91,14 +93,22 @@ local function effect(className, name, props)
 	end
 	instance.Parent = lighting
 end
-effect("BloomEffect", "RiftBloom", { Intensity = 0.7, Size = 28, Threshold = 1.6 })
-effect("ColorCorrectionEffect", "RiftColorCorrection", { Saturation = 0.12, Contrast = 0.05 })
-effect("SunRaysEffect", "SunRays", { Intensity = 0.06, Spread = 0.8 })
+-- Bloom discret (seuil haut : seuls les néons brillent)
+effect("BloomEffect", "RiftBloom", { Intensity = 0.6, Size = 24, Threshold = 1.8 })
+effect("ColorCorrectionEffect", "RiftColorCorrection", {
+	Saturation = 0.2,
+	Contrast = 0.08,
+	TintColor = roblox.Color3.fromRGB(255, 247, 240),
+})
+effect("SunRaysEffect", "SunRays", { Intensity = 0.04, Spread = 0.6 })
+-- Atmosphère légère : ciel bleu net, pas de brume laiteuse
 effect("Atmosphere", "Atmosphere", {
-	Density = 0.28,
-	Haze = 1.2,
-	Color = roblox.Color3.fromRGB(230, 200, 190),
-	Decay = roblox.Color3.fromRGB(120, 60, 50),
+	Density = 0.18,
+	Offset = 0.1,
+	Haze = 0.3,
+	Glare = 0.1,
+	Color = roblox.Color3.fromRGB(199, 220, 255),
+	Decay = roblox.Color3.fromRGB(106, 132, 180),
 })
 
 fs.writeFile(output, roblox.serializePlace(game))

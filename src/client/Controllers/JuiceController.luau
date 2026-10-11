@@ -14,14 +14,18 @@ local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
+local Mutations = require(Shared.Config.Mutations)
+local Rarities = require(Shared.Config.Rarities)
 local Economy = require(Shared.Modules.Economy)
 local Format = require(Shared.Modules.Format)
 local Remotes = require(Shared.Modules.Remotes)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
+local Widgets = require(script.Parent.Parent.UI.Widgets)
 local SoundController = require(script.Parent.SoundController)
 
 local JuiceController = {}
@@ -53,7 +57,7 @@ end
 
 local function popNumber(adornee: BasePart, text: string, color: Color3, height: number)
 	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromOffset(160, 44)
+	gui.Size = UDim2.fromOffset(190, 50)
 	gui.StudsOffsetWorldSpace = Vector3.new(0, height, 0)
 	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
@@ -63,13 +67,14 @@ local function popNumber(adornee: BasePart, text: string, color: Color3, height:
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
 	label.Font = Theme.Font
-	label.TextSize = 26
+	label.TextSize = 30
 	label.TextColor3 = color
-	label.Text = text
+	label.Text = Format.Upper(text)
 	label.Parent = gui
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Theme.Ink
-	stroke.Thickness = 2.5
+	stroke.Thickness = 3
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
 	stroke.Parent = label
 	gui.Parent = adornee
 
@@ -144,6 +149,33 @@ local CONFETTI_COLORS = {
 	Color3.fromRGB(190, 110, 255),
 }
 
+-- Deux couleurs quasi identiques (le serveur n'envoie que Color et Text)
+local function sameColor(a: Color3, b: Color3): boolean
+	return math.abs(a.R - b.R) < 0.02 and math.abs(a.G - b.G) < 0.02 and math.abs(a.B - b.B) < 0.02
+end
+
+-- Dégradé du grand texte (et sa rotation) : arc-en-ciel pour une Secrète, dégradé
+-- propre à la mutation s'il existe (Prismatique), sinon la couleur en version vive
+local function celebrationGradient(color: Color3): (ColorSequence, number)
+	local secret = Rarities.Get("Secret")
+	if secret and sameColor(color, secret.Color) then
+		return Widgets.Rainbow, 0
+	end
+	for _, mutation in Mutations.List do
+		local gradient = Widgets.MutationGradient(mutation)
+		if gradient and sameColor(color, mutation.Color) then
+			-- Chaque couleur du dégradé en version franche (pas de pastel)
+			local keypoints = {}
+			for _, keypoint in gradient.Keypoints do
+				table.insert(keypoints, ColorSequenceKeypoint.new(keypoint.Time, Theme.Vivid(keypoint.Value)))
+			end
+			return ColorSequence.new(keypoints), 0
+		end
+	end
+	local vivid = Theme.Vivid(color)
+	return ColorSequence.new(Theme.Lighten(vivid, 0.3), Theme.Darken(vivid, 0.08)), 90
+end
+
 local function celebrate(color: Color3, text: string?)
 	local root = uiRoot
 	if not root then
@@ -157,7 +189,9 @@ local function celebrate(color: Color3, text: string?)
 		Parent = root,
 	})
 	for i = 1, 42 do
-		local confettiColor = if i % 3 == 0 then color else CONFETTI_COLORS[math.random(1, #CONFETTI_COLORS)]
+		local confettiColor = if i % 3 == 0
+			then Theme.Vivid(color)
+			else CONFETTI_COLORS[math.random(1, #CONFETTI_COLORS)]
 		local piece = UIKit.New("Frame", {
 			BackgroundColor3 = confettiColor,
 			Size = UDim2.fromOffset(math.random(8, 14), math.random(14, 22)),
@@ -174,20 +208,41 @@ local function celebrate(color: Color3, text: string?)
 		}):Play()
 	end
 	if text and text ~= "" then
+		-- Gros texte penché aux couleurs de la rareté, contour noir épais (style « Steal a … »)
 		local label = UIKit.Text({
 			Text = text,
-			TextSize = 64,
+			TextSize = 78,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextWrapped = false,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.38),
-			Size = UDim2.fromOffset(900, 90),
-			Stroke = 5,
+			Position = UDim2.fromScale(0.5, 0.42),
+			Size = UDim2.fromOffset(980, 106),
+			Rotation = -3,
+			Stroke = 6,
+			Fit = true,
 			ZIndex = 51,
 			Parent = layer,
 		})
-		UIKit.Gradient(label, Theme.Lighten(color, 0.6), color)
+		-- Cadre ajusté au texte : un dégradé horizontal (arc-en-ciel) couvre tout le mot
+		local ok, bounds =
+			pcall(TextService.GetTextSize, TextService, label.Text, 78, Theme.Font, Vector2.new(4000, 200))
+		if ok and typeof(bounds) == "Vector2" then
+			label.Size = UDim2.fromOffset(math.min(980, math.ceil(bounds.X) + 28), 106)
+		end
+		local sequence, rotation = celebrationGradient(color)
+		UIKit.New("UIGradient", { Color = sequence, Rotation = rotation, Parent = label })
 		UIKit.Pop(label, 0.2)
+		-- Puis le texte bat deux fois : c'est LE moment fort
+		local scale = label:FindFirstChildOfClass("UIScale")
+		task.delay(0.35, function()
+			if scale and scale.Parent then
+				TweenService:Create(
+					scale,
+					TweenInfo.new(0.28, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 1, true),
+					{ Scale = 1.08 }
+				):Play()
+			end
+		end)
 		task.delay(1.6, function()
 			TweenService:Create(label, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
 			local stroke = label:FindFirstChildOfClass("UIStroke")
@@ -247,68 +302,120 @@ local function showOfflinePopup(amount: number, seconds: number)
 	if not root then
 		return
 	end
+	-- Fond assombri : la fenêtre est la seule chose à regarder
+	local backdrop = UIKit.New("TextButton", {
+		Name = "OfflineBackdrop",
+		Text = "",
+		AutoButtonColor = false,
+		BackgroundColor3 = Color3.fromRGB(4, 14, 44),
+		BackgroundTransparency = 0.45,
+		Position = UDim2.fromOffset(-60, -120),
+		Size = UDim2.new(1, 120, 1, 240),
+		ZIndex = 59,
+		Parent = root,
+	})
 	local card = UIKit.New("Frame", {
 		Name = "OfflinePopup",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.48),
-		Size = UDim2.fromOffset(520, 300),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(540, 320),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 60,
 		Parent = root,
 	})
 	UIKit.Corner(card, 26)
-	UIKit.Stroke(card, 4.5)
+	UIKit.Stroke(card, 5)
 	UIKit.Gradient(card, Theme.PanelTop, Theme.PanelBottom)
-	UIKit.IconCircle("💤", Theme.Gold, 96, {
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0, 0),
-		ZIndex = 61,
+	local rim = UIKit.New("Frame", {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(4, 4),
+		Size = UDim2.new(1, -8, 1, -8),
+		ZIndex = 60,
 		Parent = card,
 	})
+	UIKit.Corner(rim, 22)
+	UIKit.Stroke(rim, 2.5, Color3.new(1, 1, 1), 0.6)
+
+	-- Ruban de titre à cheval sur le bord haut
+	local ribbon = UIKit.Plate({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0),
+		Size = UDim2.fromOffset(380, 74),
+		ZIndex = 62,
+		StrokeThickness = 4.5,
+		Parent = card,
+	}, "Gold", 6, 20)
 	UIKit.Text({
-		Text = "BON RETOUR !",
+		Text = "💤 BON RETOUR !",
 		TextSize = 36,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(0, 56),
-		Size = UDim2.new(1, 0, 0, 44),
-		Stroke = 3.5,
-		ZIndex = 61,
-		Parent = card,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -24, 0, 44),
+		Stroke = 4,
+		Fit = true,
+		ZIndex = 64,
+		Parent = ribbon.Face,
 	})
 	UIKit.Body({
 		Text = "Pendant ton absence (" .. Format.Time(seconds) .. "), tes créatures ont travaillé :",
+		TextColor3 = Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextSize = 17,
-		Position = UDim2.fromOffset(20, 104),
-		Size = UDim2.new(1, -40, 0, 24),
+		TextSize = 19,
+		Position = UDim2.fromOffset(30, 54),
+		Size = UDim2.new(1, -60, 0, 48),
+		Stroke = 1.8,
 		ZIndex = 61,
 		Parent = card,
 	})
+	-- Gros montant vert dans un encart sombre
+	local amountBox = UIKit.New("Frame", {
+		BackgroundColor3 = Theme.Inset,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromOffset(270, 108),
+		Size = UDim2.fromOffset(400, 92),
+		ZIndex = 61,
+		Parent = card,
+	})
+	UIKit.Corner(amountBox, 18)
+	UIKit.Stroke(amountBox, 3.5)
 	local amountLabel = UIKit.Text({
 		Text = "+" .. Format.Money(amount),
-		TextSize = 56,
+		TextSize = 64,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(0, 132),
-		Size = UDim2.new(1, 0, 0, 66),
-		Stroke = 4,
-		ZIndex = 61,
-		Parent = card,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(10, 4),
+		Size = UDim2.new(1, -20, 1, -8),
+		Stroke = 5,
+		Fit = true,
+		ZIndex = 62,
+		Parent = amountBox,
 	})
-	UIKit.Gradient(amountLabel, Color3.fromRGB(230, 255, 220), Color3.fromRGB(90, 235, 90))
+	UIKit.Gradient(amountLabel, Color3.fromRGB(210, 255, 200), Color3.fromRGB(70, 240, 80))
+	local collected = false
+	local function collect()
+		if collected then
+			return
+		end
+		collected = true
+		celebrate(Theme.Money, nil)
+		backdrop:Destroy()
+		card:Destroy()
+	end
 	UIKit.Button({
 		Text = "💰 RÉCUPÉRER",
 		Color = "Green",
-		TextSize = 24,
+		TextSize = 27,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -20),
-		Size = UDim2.fromOffset(300, 68),
+		Size = UDim2.fromOffset(330, 78),
+		Radius = 16,
 		ZIndex = 62,
 		Parent = card,
-		OnClick = function()
-			celebrate(Theme.Money, nil)
-			card:Destroy()
-		end,
+		OnClick = collect,
 	})
+	backdrop.Activated:Connect(collect)
 	UIKit.Pop(card, 0.5)
 end
 

@@ -51,7 +51,10 @@ GameConfig.Rift = {
 	FirstDimension = "Lava",
 	SpawnIntervalSeconds = 3.5, -- intervalle moyen entre deux créatures
 	MaxActiveSpawns = 24, -- plafond de créatures simultanées sur le chemin
-	CreatureWalkSpeed = 7, -- vitesse sur le chemin (studs/s)
+	-- Vitesse sur le chemin (studs/s). Le tapis droit fait ~385 studs : à 5 studs/s une
+	-- créature reste ~77 s visible (comme l'ancien anneau de ~545 studs à 7), soit
+	-- ~22 créatures à la fois avec un spawn toutes les 3,5 s (sous MaxActiveSpawns).
+	CreatureWalkSpeed = 5,
 	CrossDimensionChance = 0.15, -- 15 % de "fuites" : créature d'une autre dimension
 	WalkToBaseSpeed = 16, -- vitesse de la créature achetée qui rejoint la base
 }
