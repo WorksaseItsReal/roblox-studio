@@ -6,9 +6,10 @@
 	  simulé par le client, donc la collision locale suffit) ;
 	- affiche "Voler" seulement sur les bases des autres (et pas si leur barrière
 	  est active), "Gérer" / bouton de barrière / fusion seulement chez soi ;
-	- met à jour le grand panneau au-dessus de chaque entrée (« BASE DE {Nom} »
-	  + ligne d'état : verrouillée avec le temps restant, ou « TA BASE ») et
-	  l'étiquette du bouton de verrouillage (prêt / actif / recharge).
+	- met à jour le panneau au-dessus de chaque entrée (« Base de {nom} » en
+	  Fredoka One, casse normale + pastille d'état : verrouillée avec le temps
+	  restant, ou « Ta base ») et l'étiquette du bouton de verrouillage (prêt /
+	  actif / recharge).
 ]]
 
 local Players = game:GetService("Players")
@@ -84,12 +85,14 @@ local function setupPlot(plot: Instance)
 end
 
 local WHITE = Color3.new(1, 1, 1)
-local MUTED = Color3.fromRGB(205, 210, 222)
-local DANGER = Color3.fromRGB(255, 70, 70)
-local GOLD = Color3.fromRGB(255, 215, 40)
--- Titre seul (pleine hauteur) ou titre + ligne d'état en dessous
-local TITLE_FULL = { UDim2.fromScale(0.03, 0.08), UDim2.fromScale(0.94, 0.84) }
-local TITLE_TOP = { UDim2.fromScale(0.03, 0.04), UDim2.fromScale(0.94, 0.6) }
+local MUTED = Color3.fromRGB(201, 207, 219)
+local DANGER = Color3.fromRGB(255, 77, 77)
+-- Textes de la pastille d'état (fond encre) : rouge et or éclaircis pour rester lisibles
+local DANGER_ON_INK = Color3.fromRGB(255, 120, 120)
+local GOLD_ON_INK = Color3.fromRGB(255, 201, 60)
+-- Titre seul (pleine hauteur) ou titre + pastille d'état en dessous
+local TITLE_FULL = { UDim2.fromScale(0.04, 0.12), UDim2.fromScale(0.92, 0.76) }
+local TITLE_TOP = { UDim2.fromScale(0.04, 0.04), UDim2.fromScale(0.92, 0.54) }
 
 local function numberAttribute(instance: Instance, name: string, default: number): number
 	local value = instance:GetAttribute(name)
@@ -111,17 +114,16 @@ local function updateSign(plot: Instance, now: number)
 		return
 	end
 	local ownerName = plot:GetAttribute("OwnerName") or ""
-	-- Tout en capitales (accents compris) : Luckiest Guy a de vraies minuscules, un
-	-- nom en casse mixte paraîtrait irrégulier à côté de « BASE DE »
-	local titleText, titleColor = "BASE DE " .. Format.Upper(ownerName), WHITE
+	-- Casse normale (docs/ART_DIRECTION.md) : le pseudo est affiché tel quel
+	local titleText, titleColor = "Base de " .. ownerName, WHITE
 	local statusText, statusColor = "", WHITE
 	if ownerName == "" then
-		titleText, titleColor = "BASE LIBRE", MUTED
+		titleText = "Base libre"
 	elseif plot:GetAttribute("BarrierActive") then
 		local left = numberAttribute(plot, "BarrierEndsAt", now) - now
-		statusText, statusColor = "🔒 VERROUILLÉE " .. Format.Time(left), DANGER
+		statusText, statusColor = "🔒 Verrouillée " .. Format.Time(left), DANGER_ON_INK
 	elseif isMine(plot) then
-		statusText, statusColor = "★ TA BASE ★", GOLD
+		statusText, statusColor = "★ Ta base ★", GOLD_ON_INK
 	end
 	-- Le panneau peut avoir une face avant (SignGui) et une face arrière
 	for _, gui in sign:GetChildren() do
@@ -134,6 +136,11 @@ local function updateSign(plot: Instance, now: number)
 				local layout = if statusText == "" then TITLE_FULL else TITLE_TOP
 				title.Position = layout[1]
 				title.Size = layout[2]
+				-- La pastille (fond encre) n'apparaît que s'il y a un état à afficher
+				local pill = status.Parent
+				if pill and pill:IsA("GuiObject") and pill.Name == "StatusPill" then
+					pill.Visible = statusText ~= ""
+				end
 			elseif statusText ~= "" then
 				-- Panneau d'une map manuelle sans ligne d'état : l'état remplace le titre
 				setText(title, statusText, statusColor)
@@ -159,7 +166,7 @@ local function updateLockLabel(plot: Instance, now: number)
 	if cooldown > 0 then
 		setText(label, "⏳ " .. Format.Time(cooldown), MUTED)
 	else
-		setText(label, "🔒 VERROUILLER", WHITE)
+		setText(label, "🔒 Verrouiller", WHITE)
 	end
 end
 

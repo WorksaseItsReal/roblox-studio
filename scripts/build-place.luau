@@ -65,22 +65,30 @@ if existing then
 end
 local map = MapBuilder.Build(workspace)
 
--- Ambiance par défaut : plein jour franc, couleurs vives (docs/ART_DIRECTION.md).
--- Le client (RiftVisualController) n'y ajoute qu'une légère teinte par dimension.
+-- Ambiance par défaut (docs/ART_DIRECTION.md, section 3) : plein jour doux.
+-- Le client (RiftVisualController) reprend ces valeurs et n'y ajoute qu'une très
+-- légère teinte par dimension.
 local lighting = game:GetService("Lighting")
-lighting.ClockTime = 13
-lighting.Brightness = 3
+lighting.ClockTime = 14
+lighting.Brightness = 2.2
 lighting.GlobalShadows = true
 -- "Future" : éclairage le plus beau (lumières dynamiques, néons). Roblox réduit
 -- automatiquement la qualité sur les appareils modestes.
 pcall(function()
 	lighting.Technology = roblox.Enum.Technology.Future
 end)
+-- Ombres un peu adoucies (plein jour doux, pas de contre-jour dur)
+pcall(function()
+	lighting.ShadowSoftness = 0.25
+end)
 lighting.EnvironmentDiffuseScale = 1
--- Reflets du ciel atténués : les plastiques lisses gardent leur couleur franche
+-- Reflets du ciel modérés : les matériaux (béton, tissu, planches) gardent leur couleur
 lighting.EnvironmentSpecularScale = 0.5
-lighting.Ambient = roblox.Color3.fromRGB(112, 98, 92)
-lighting.OutdoorAmbient = roblox.Color3.fromRGB(162, 153, 149)
+-- Ambiances quasi neutres (mêmes valeurs que la dimension de départ, Lave, dans
+-- Config/Dimensions.luau) : ombres claires, légèrement chaudes
+local ambient = roblox.Color3.fromRGB(110, 104, 100)
+lighting.Ambient = ambient
+lighting.OutdoorAmbient = ambient:Lerp(roblox.Color3.new(1, 1, 1), 0.35)
 local function effect(className, name, props)
 	local existing = lighting:FindFirstChild(name)
 	if existing then
@@ -93,22 +101,23 @@ local function effect(className, name, props)
 	end
 	instance.Parent = lighting
 end
--- Bloom discret (seuil haut : seuls les néons brillent)
-effect("BloomEffect", "RiftBloom", { Intensity = 0.6, Size = 24, Threshold = 1.8 })
+-- Bloom discret : seuil haut, seuls les néons (Rift, globes, lasers) brillent
+effect("BloomEffect", "RiftBloom", { Intensity = 0.35, Size = 24, Threshold = 2.2 })
+-- Étalonnage quasi neutre : les matériaux et couleurs du monde restent naturels
 effect("ColorCorrectionEffect", "RiftColorCorrection", {
-	Saturation = 0.2,
-	Contrast = 0.08,
-	TintColor = roblox.Color3.fromRGB(255, 247, 240),
+	Saturation = 0.08,
+	Contrast = 0.05,
+	TintColor = roblox.Color3.fromRGB(255, 250, 245),
 })
-effect("SunRaysEffect", "SunRays", { Intensity = 0.04, Spread = 0.6 })
--- Atmosphère légère : ciel bleu net, pas de brume laiteuse
+effect("SunRaysEffect", "SunRays", { Intensity = 0.03, Spread = 0.6 })
+-- Atmosphère légère : un voile de lumière à l'horizon, jamais de brume laiteuse
 effect("Atmosphere", "Atmosphere", {
-	Density = 0.18,
+	Density = 0.28,
 	Offset = 0.1,
-	Haze = 0.3,
+	Haze = 1.2,
 	Glare = 0.1,
-	Color = roblox.Color3.fromRGB(199, 220, 255),
-	Decay = roblox.Color3.fromRGB(106, 132, 180),
+	Color = roblox.Color3.fromRGB(205, 224, 250),
+	Decay = roblox.Color3.fromRGB(116, 140, 182),
 })
 
 fs.writeFile(output, roblox.serializePlace(game))

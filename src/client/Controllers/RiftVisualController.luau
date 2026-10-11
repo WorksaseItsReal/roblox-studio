@@ -2,15 +2,15 @@
 	RiftVisualController
 	====================
 	Effets visuels du monde, 100 % côté client (aucun coût serveur ni réseau) :
-	- recoloration de la Rift, des fissures, de l'estrade, des chevrons du tapis,
-	  des lampadaires et de la colonne de lumière selon la dimension active ;
+	- recoloration de la Rift (vortex, cristaux, fissures, liseré de l'estrade) et
+	  de la colonne de lumière selon la dimension active ;
 	- ambiance (éclairage, atmosphère, teinte, bloom) avec transition douce.
-	  Plein jour franc (docs/ART_DIRECTION.md) : la dimension ne fait que teinter
-	  légèrement l'ambiance, les couleurs du monde restent vives ;
+	  Plein jour doux (docs/ART_DIRECTION.md, section 3) : la dimension ne fait que
+	  teinter très légèrement l'ambiance, le monde garde ses matériaux ;
 	- tourbillons qui tournent, bras de la spirale qui tournent autour de l'axe de la
 	  Rift, éclats en orbite, portails instables animés ;
-	- chevrons du tapis qui "défilent" (lumière qui court dans le sens de marche
-	  des créatures).
+	- flèches peintes du tapis (pièces « Chevron ») : une légère vague d'opacité
+	  court dans le sens de marche des créatures (peinture, jamais de néon).
 ]]
 
 local Lighting = game:GetService("Lighting")
@@ -36,8 +36,6 @@ local TINTED = {
 	Shard = "Accent",
 	Swirl = "Accent",
 	RoadGlow = "Main",
-	Chevron = "Accent", -- or (Lave), blanc (Néant, Glace)... lisible sur le tapis rouge
-	Lamp = "Accent",
 }
 
 -- Tourbillons : vitesse de rotation (radians/s) autour de l'axe du disque
@@ -48,18 +46,29 @@ local ARM_SPEED = 0.7
 -- Assombrissement de l'anneau intérieur (même valeur que MapBuilder.DEEP_SHADE)
 local DEEP_SHADE = 0.45
 
--- Réglages de base (mêmes valeurs que scripts/build-place.luau)
-local SKY_HAZE = Color3.fromRGB(199, 220, 255) -- Atmosphere.Color : ciel clair
-local SKY_DECAY = Color3.fromRGB(106, 132, 180) -- Atmosphere.Decay
-local ATMOSPHERE_DENSITY = 0.18
-local SATURATION = 0.2
-local CONTRAST = 0.08
-local BLOOM_INTENSITY = 0.6
+-- Réglages de base : plein jour doux (mêmes valeurs que scripts/build-place.luau)
+local SKY_HAZE = Color3.fromRGB(205, 224, 250) -- Atmosphere.Color : ciel clair
+local SKY_DECAY = Color3.fromRGB(116, 140, 182) -- Atmosphere.Decay
+local ATMOSPHERE_DENSITY = 0.28
+local ATMOSPHERE_HAZE = 1.2
+local SATURATION = 0.08
+local CONTRAST = 0.05
+local BLOOM_INTENSITY = 0.35
+local BLOOM_THRESHOLD = 2.2
+-- Part de la couleur de la dimension dans le ciel : nuance à peine perceptible
+local SKY_TINT = 0.12
+local DECAY_TINT = 0.08
+
+-- Flèches peintes du tapis : une vague d'opacité (gain de 0,2 sur leur transparence
+-- de base) parcourt une flèche sur 7, à 1,5 flèche par seconde
+local ARROW_WAVE_SPEED = 1.5
+local ARROW_WAVE_PERIOD = 7
+local ARROW_WAVE_GAIN = 0.2
 
 local tinted: { [string]: { BasePart } } = {}
 local spinners: { { Part: BasePart, Base: CFrame, Speed: number } } = {}
 local shards: { BasePart } = {}
-local chevrons: { { Part: BasePart, Index: number } } = {}
+local chevrons: { { Part: BasePart, Index: number, Base: number } } = {}
 local arms: { { Part: BasePart, Offset: CFrame } } = {}
 local armSpeed = ARM_SPEED
 -- Angle intégré image par image : changer de vitesse (tempête) ne fait pas sauter les bras
@@ -89,7 +98,7 @@ local function getOrCreate(className: string, name: string): any
 	return created
 end
 
-local STORM_TINT = Color3.fromRGB(255, 200, 235)
+local STORM_TINT = Color3.fromRGB(255, 214, 236)
 
 -- Étalonnage (teinte, contraste, saturation) calculé en un seul endroit et appliqué
 -- en un seul tween : deux tweens concurrents sur le même effet s'annuleraient
@@ -99,8 +108,8 @@ local function applyGrading(duration: number)
 	local tint = if stormOn then STORM_TINT elseif dimension then dimension.Visual.Tint else Color3.new(1, 1, 1)
 	tween(colorCorrection, {
 		TintColor = tint,
-		Contrast = if stormOn then 0.15 else CONTRAST,
-		Saturation = if stormOn then 0.3 else SATURATION,
+		Contrast = if stormOn then 0.12 else CONTRAST,
+		Saturation = if stormOn then 0.18 else SATURATION,
 	}, duration)
 end
 
@@ -134,7 +143,11 @@ local function applyDimension(dimensionId: string)
 	tween(Lighting, { Ambient = visual.Ambient, OutdoorAmbient = visual.Ambient:Lerp(Color3.new(1, 1, 1), 0.35) }, 3)
 	applyGrading(3)
 	-- Simple nuance du ciel clair : jamais de brume colorée qui délave le monde
-	tween(atmosphere, { Color = SKY_HAZE:Lerp(visual.FogColor, 0.2), Decay = SKY_DECAY:Lerp(visual.FogColor, 0.12) }, 3)
+	tween(
+		atmosphere,
+		{ Color = SKY_HAZE:Lerp(visual.FogColor, SKY_TINT), Decay = SKY_DECAY:Lerp(visual.FogColor, DECAY_TINT) },
+		3
+	)
 end
 
 -- Dossiers ignorés : créatures (sur le tapis, dans les bases) et portails instables.
@@ -163,7 +176,11 @@ local function collect(map: Instance)
 			elseif name == "Shard" then
 				table.insert(shards, descendant)
 			elseif name == "Chevron" then
-				table.insert(chevrons, { Part = descendant, Index = descendant:GetAttribute("Index") or 0 })
+				table.insert(chevrons, {
+					Part = descendant,
+					Index = descendant:GetAttribute("Index") or 0,
+					Base = descendant.Transparency,
+				})
 			elseif name == "Core" and descendant.Parent and descendant.Parent.Name == "Rift" then
 				riftCenter = descendant.Position
 				riftAxis = descendant.CFrame.RightVector -- axe du disque (cylindre couché)
@@ -176,15 +193,15 @@ function RiftVisualController.Start()
 	colorCorrection = getOrCreate("ColorCorrectionEffect", "RiftColorCorrection")
 	colorCorrection.Saturation = SATURATION
 	colorCorrection.Contrast = CONTRAST
-	-- Atmosphère légère : pas de brume laiteuse
+	-- Atmosphère légère : un voile clair à l'horizon, pas de brume laiteuse
 	atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or getOrCreate("Atmosphere", "Atmosphere")
 	atmosphere.Density = ATMOSPHERE_DENSITY
-	atmosphere.Haze = 0.3
-	-- Bloom discret : seuil haut, seuls les néons brillent
+	atmosphere.Haze = ATMOSPHERE_HAZE
+	-- Bloom discret : seuil haut, seuls les néons (Rift, globes, lasers) brillent
 	bloom = getOrCreate("BloomEffect", "RiftBloom")
 	bloom.Intensity = BLOOM_INTENSITY
 	bloom.Size = 24
-	bloom.Threshold = 1.8
+	bloom.Threshold = BLOOM_THRESHOLD
 
 	local map = workspace:WaitForChild("Map")
 	map:WaitForChild("Rift")
@@ -217,8 +234,8 @@ function RiftVisualController.Start()
 			return
 		end
 		stormOn = active
-		tween(atmosphere, { Density = if active then 0.34 else ATMOSPHERE_DENSITY }, 2)
-		tween(bloom, { Intensity = if active then 1.1 else BLOOM_INTENSITY }, 2)
+		tween(atmosphere, { Density = if active then 0.4 else ATMOSPHERE_DENSITY }, 2)
+		tween(bloom, { Intensity = if active then 0.7 else BLOOM_INTENSITY }, 2)
 		applyGrading(2)
 		for _, beam in ipairs(tinted.RiftBeam or {}) do
 			tween(beam, { Transparency = if active then 0.6 else 0.86 }, 2)
@@ -265,11 +282,12 @@ function RiftVisualController.Start()
 			local offset = Vector3.new(math.cos(angle) * shardOrbit, math.sin(t + i) * 4, math.sin(angle) * shardOrbit)
 			shard.CFrame = CFrame.new(riftCenter + offset) * CFrame.Angles(t, t * 0.7, 0)
 		end
-		-- Lumière qui court le long du tapis (groupes de 6 chevrons)
-		local phase = t * 6
+		-- Vague d'opacité qui court le long du tapis (flèches peintes, pas de néon)
+		local phase = t * ARROW_WAVE_SPEED
 		for _, chevron in chevrons do
-			local wave = (chevron.Index - phase) % 6
-			chevron.Part.Transparency = if wave < 1.5 then 0 else 0.65
+			local wave = (chevron.Index - phase) % ARROW_WAVE_PERIOD
+			local glow = math.max(0, 1 - math.abs(wave - 1))
+			chevron.Part.Transparency = math.max(0, chevron.Base - ARROW_WAVE_GAIN * glow)
 		end
 		for _, portal in portals:GetChildren() do
 			local core = portal:FindFirstChild("Core")

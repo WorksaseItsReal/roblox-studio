@@ -20,6 +20,7 @@ local SoundController = require(Controllers.SoundController)
 local JuiceController = require(Controllers.JuiceController)
 local TutorialController = require(Controllers.TutorialController)
 local BoardController = require(Controllers.BoardController)
+local StandController = require(Controllers.StandController)
 local UIController = require(UI.UIController)
 
 -- Contexte partagé avec l'interface (UI, Root et Toast sont remplis par UIController)
@@ -33,6 +34,7 @@ local ctx = {
 
 StateController.Start()
 UIController.Start(ctx)
+StandController.Start()
 SoundController.Start()
 EffectsController.Start()
 JuiceController.Start(ctx)

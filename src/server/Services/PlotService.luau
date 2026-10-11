@@ -10,6 +10,8 @@
 	                    pour le propriétaire
 	    ManagePrompt -> traité par le CLIENT (ouvre l'inventaire), masqué pour les autres
 	  Le masquage client n'est que du confort : le serveur revérifie tout.
+	- Socles : seuls ceux que le joueur a débloqués sont visibles (blancs, anneau
+	  couleur d'équipe) ; les autres restent invisibles et traversables.
 ]]
 
 local Players = game:GetService("Players")
@@ -34,22 +36,32 @@ local function getPlotColor(plot: PlotRecord): Color3
 	return if typeof(color) == "Color3" then color else plot.Barrier.Color
 end
 
--- Socle débloqué : blanc, anneau néon couleur d'équipe. Verrouillé : le socle reste
--- clair (gris perle) et seul l'anneau passe en gris foncé mat : la base reste propre
--- même quand presque tout est verrouillé (mêmes valeurs que MapBuilder)
-local UNLOCKED_SLOT_COLOR = Color3.fromRGB(250, 250, 255)
-local LOCKED_SLOT_COLOR = Color3.fromRGB(217, 219, 230)
-local LOCKED_RING_COLOR = Color3.fromRGB(78, 80, 94)
+-- Socle débloqué : blanc (Plastic), anneau fin couleur d'équipe (SmoothPlastic, pas
+-- de néon). Verrouillé : INVISIBLE et traversable (docs/ART_DIRECTION.md : plus de
+-- rangées de socles gris façon « parking ») ; il apparaît quand le joueur le débloque
+local PAD_COLOR = Color3.fromRGB(248, 248, 250)
 local function setSlotLook(slot: BasePart, unlocked: boolean, color: Color3)
-	slot.Color = if unlocked then UNLOCKED_SLOT_COLOR else LOCKED_SLOT_COLOR
-	slot.Transparency = 0
+	if unlocked then
+		slot.Color = PAD_COLOR
+		slot.Material = Enum.Material.Plastic
+		slot.Transparency = 0
+		-- CanQuery ne se règle que si CanCollide est faux : on le rétablit d'abord
+		slot.CanQuery = true
+		slot.CanCollide = true
+	else
+		slot.Transparency = 1
+		slot.CanCollide = false
+		slot.CanQuery = false
+	end
 	local ring = slot:FindFirstChild("SlotRing")
 	if ring and ring:IsA("BasePart") then
-		ring.Color = if unlocked then color else LOCKED_RING_COLOR
-		ring.Material = if unlocked then Enum.Material.Neon else Enum.Material.SmoothPlastic
-		ring.Transparency = 0
+		ring.Color = color
+		ring.Material = Enum.Material.SmoothPlastic
+		ring.Transparency = if unlocked then 0 else 1
 	end
 end
+-- Exposé pour les aperçus de la map hors Roblox (aucun service requis)
+PlotService.SetSlotLook = setSlotLook
 
 -- Dessus d'un emplacement, orienté comme la base (face à l'entrée).
 -- Fonctionne quelle que soit la forme du socle (bloc, cylindre couché...).
@@ -182,7 +194,7 @@ function PlotService.RenderAll(player: Player)
 	PlotService.RefreshSlotPads(player)
 end
 
--- Colore les emplacements débloqués / verrouillés
+-- Montre les emplacements débloqués, cache les autres
 function PlotService.RefreshSlotPads(player: Player)
 	local plot = plotByPlayer[player]
 	local data = Services.DataService.GetData(player)

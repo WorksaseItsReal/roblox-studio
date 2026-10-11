@@ -5,14 +5,17 @@
 	Vous pouvez remplacer cette map par la vôtre (voir docs/MAP_BUILD.md) : il suffit
 	de respecter les NOMS des instances de jeu, MapService vérifie le contrat.
 
-	Style « Steal a … » (docs/ART_DIRECTION.md) : une île flottante, un long tapis
-	rouge en ligne droite où défilent les créatures, et 4 bases de chaque côté dont
-	l'entrée fait face au tapis.
+	Direction artistique v3 « propre » (docs/ART_DIRECTION.md, section 3) : une île
+	flottante en herbe, un long tapis rouge en tissu bordé d'or où défilent les
+	créatures, et 4 bases de chaque côté dont l'entrée fait face au tapis.
+	Peu d'éléments, de vrais matériaux Roblox (Grass, Fabric, Concrete, WoodPlanks,
+	Brick, Slate), et du néon UNIQUEMENT pour la Rift, les globes des lampadaires et
+	(en jeu) les lasers d'une base verrouillée.
 
 	Vue du dessus (Y vers le haut, -Z = "nord") :
 
 	                   [  RIFT  ]        <- portail géant face à +Z, Z = -195 (rayon 22)
-	         [Classement]  |  |  [Classement]
+	      [Classement] [Boutique] | | [Index] [Classement]   <- esplanade de la Rift
 	                       |  |
 	      [Base 1] ◄────   |  |   ────► [Base 2]     Z = -105
 	      [Base 3]         |  |         [Base 4]     Z =  -35
@@ -21,13 +24,16 @@
 	                       |  |
 	                   [ sortie ]        <- petit portail sombre, Z = +195
 
-	Tapis rouge (X = 0, largeur 14) bordé d'or, trottoirs gris clair de X = ±8 à ±18,
+	Tapis rouge (X = 0, largeur 14) bordé d'or, trottoirs en béton de X = ±8 à ±18,
 	bases centrées en X = ±66. Les créatures marchent vers +Z.
 
-	Noms utilisés par le client pour les effets (recolorés selon la dimension) :
+	Noms utilisés par le client pour les effets :
 	  RingSegment, RiftTooth, Core, RiftDeep, Swirl, Swirl2, SwirlArm (tournent autour
 	  de l'axe de la Rift), Shard (orbite de rayon Rift.ShardOrbit), RiftBeam, Crack,
-	  RoadGlow, Chevron (attribut Index), Lamp, ExitSwirl (rotation seulement)
+	  RoadGlow (recolorés selon la dimension) ; Chevron (attribut Index : flèches
+	  peintes du tapis, légère vague d'opacité) ; ExitSwirl, FusionSwirl (rotation).
+	Stands du marché (Map.Stands) : leur ProximityPrompt porte l'attribut Panel
+	("Shop", "Index") : StandController ouvre la fenêtre correspondante.
 ]]
 
 local MapBuilder = {}
@@ -46,7 +52,9 @@ MapBuilder.PLOT_X = 66 -- distance entre l'axe du tapis et le centre des bases
 MapBuilder.PLOT_ROWS_Z = { -105, -35, 35, 105 }
 MapBuilder.PLOT_WIDTH = 60 -- le long du tapis
 MapBuilder.PLOT_DEPTH = 84 -- de l'entrée au mur du fond
-MapBuilder.WALL_HEIGHT = 8
+-- Murs bas (on voit l'intérieur par-dessus) mais pas franchissables d'un saut :
+-- corps de 7 + chaperon de 1 = 8,6 studs au-dessus de l'herbe (saut ≈ 7,2)
+MapBuilder.WALL_HEIGHT = 7
 MapBuilder.ISLAND_RADIUS = 300
 
 local PATH_Y = MapBuilder.PATH_Y
@@ -58,60 +66,76 @@ local ARCH_CLEAR = 12 -- hauteur libre sous l'arche (= hauteur de la barrière)
 local RIFT_RADIUS = 22
 -- Le bas de l'anneau affleure le tapis : les créatures sortent du vortex
 local RIFT_CENTER = Vector3.new(0, PATH_Y + RIFT_RADIUS, MapBuilder.RIFT_Z)
-local SHARD_ORBIT = RIFT_RADIUS + 17 -- orbite des éclats : au-delà des piliers (~37 studs), avant les tableaux
+local SHARD_ORBIT = RIFT_RADIUS + 17 -- orbite des éclats : au-delà des piliers (~36 studs), avant les tableaux
 -- Anneau sombre du vortex : couleur de la faille assombrie (même valeur côté client)
 local DEEP_SHADE = 0.45
 local EXIT_RADIUS = 9
 local EXIT_CENTER = Vector3.new(0, PATH_Y + EXIT_RADIUS, MapBuilder.EXIT_Z)
+local PLAZA_RADIUS = 58
 
--- Couleurs d'équipe (une par base, dans l'ordre des PlotId)
+-- Couleurs d'équipe (une par base, dans l'ordre des PlotId) : franches mais
+-- maîtrisées. Elles n'apparaissent que sur le chaperon des murs, l'arche et le panneau
 local PLOT_COLORS = {
-	Color3.fromRGB(255, 64, 64), -- rouge
-	Color3.fromRGB(255, 140, 30), -- orange
-	Color3.fromRGB(255, 210, 40), -- jaune
-	Color3.fromRGB(60, 210, 90), -- vert
-	Color3.fromRGB(30, 200, 255), -- cyan
-	Color3.fromRGB(50, 110, 255), -- bleu
-	Color3.fromRGB(160, 80, 255), -- violet
-	Color3.fromRGB(255, 80, 190), -- rose
+	Color3.fromRGB(236, 72, 72), -- rouge
+	Color3.fromRGB(245, 146, 50), -- orange
+	Color3.fromRGB(240, 192, 46), -- jaune
+	Color3.fromRGB(68, 186, 96), -- vert
+	Color3.fromRGB(44, 178, 226), -- cyan
+	Color3.fromRGB(70, 118, 236), -- bleu
+	Color3.fromRGB(150, 96, 234), -- violet
+	Color3.fromRGB(234, 96, 170), -- rose
 }
 
--- Palette du monde (docs/ART_DIRECTION.md) : couleurs franches, aucun pastel
+-- Palette du monde (docs/ART_DIRECTION.md, section 3)
 local C = {
-	Grass = Color3.fromRGB(86, 196, 70),
-	GrassDark = Color3.fromRGB(66, 168, 58),
-	Leaves = Color3.fromRGB(52, 172, 62),
-	Dirt = Color3.fromRGB(176, 116, 66),
-	Cliff = Color3.fromRGB(146, 98, 64),
-	CliffDark = Color3.fromRGB(104, 72, 56),
-	Stone = Color3.fromRGB(160, 162, 176),
-	StoneDark = Color3.fromRGB(74, 68, 96),
-	RiftStone = Color3.fromRGB(52, 30, 100),
-	RiftStoneLight = Color3.fromRGB(84, 52, 156),
-	Carpet = Color3.fromRGB(215, 38, 52),
-	CarpetDark = Color3.fromRGB(176, 24, 40),
-	Gold = Color3.fromRGB(255, 200, 60),
-	Sidewalk = Color3.fromRGB(232, 232, 240),
-	SidewalkJoint = Color3.fromRGB(206, 206, 220),
-	White = Color3.fromRGB(255, 255, 255),
-	Floor = Color3.fromRGB(245, 245, 250),
-	Ink = Color3.fromRGB(0, 0, 0),
-	Metal = Color3.fromRGB(46, 48, 60),
-	-- Anthracite des poutres et plinthes : un mélange couleur d'équipe + noir donnerait
-	-- des olive / marron ternes sous les panneaux jaunes et orange
-	Trim = Color3.fromRGB(30, 30, 38),
-	Wood = Color3.fromRGB(128, 82, 48),
-	Laser = Color3.fromRGB(255, 28, 40),
-	LensOff = Color3.fromRGB(90, 24, 30), -- lentille éteinte (BaseDefenseService l'allume)
-	SlotLocked = Color3.fromRGB(217, 219, 230), -- socle verrouillé (mêmes valeurs que PlotService)
-	SlotRingLocked = Color3.fromRGB(78, 80, 94),
-	LockRed = Color3.fromRGB(255, 36, 48),
-	Rift = Color3.fromRGB(255, 90, 20), -- dimension de départ (Lave), recolorée par le client
+	-- Sols et chemins
+	Grass = Color3.fromRGB(93, 181, 71),
+	Carpet = Color3.fromRGB(200, 32, 47),
+	Gold = Color3.fromRGB(242, 182, 50),
+	Sidewalk = Color3.fromRGB(207, 207, 214),
+	Curb = Color3.fromRGB(233, 233, 238),
+	Joint = Color3.fromRGB(186, 186, 196),
+	-- Bases
+	BaseFloor = Color3.fromRGB(231, 201, 160),
+	BaseWall = Color3.fromRGB(240, 237, 230),
+	Pad = Color3.fromRGB(248, 248, 250),
+	-- Nature
+	Leaves = Color3.fromRGB(62, 148, 64),
+	LeavesLight = Color3.fromRGB(78, 164, 70),
+	Bush = Color3.fromRGB(82, 170, 70),
+	BushLight = Color3.fromRGB(106, 190, 82),
+	Trunk = Color3.fromRGB(120, 84, 58),
+	Rock = Color3.fromRGB(150, 153, 164),
+	RockDark = Color3.fromRGB(120, 123, 136),
+	Dirt = Color3.fromRGB(164, 112, 70),
+	Cliff = Color3.fromRGB(138, 96, 66),
+	CliffDark = Color3.fromRGB(100, 72, 58),
+	-- Bois des stands
+	WoodLight = Color3.fromRGB(222, 178, 126),
+	Wood = Color3.fromRGB(186, 134, 88),
+	WoodDark = Color3.fromRGB(128, 86, 54),
+	-- Rift : pierre sombre + vortex (couleurs de départ, dimension Lave)
+	RiftStone = Color3.fromRGB(66, 58, 92),
+	RiftStoneLight = Color3.fromRGB(88, 80, 118),
+	Rift = Color3.fromRGB(255, 90, 20),
 	RiftAccent = Color3.fromRGB(255, 200, 60),
-	Magic = Color3.fromRGB(160, 80, 255),
-	Navigation = Color3.fromRGB(50, 150, 255),
 	Exit = Color3.fromRGB(150, 60, 255),
-	ExitStone = Color3.fromRGB(48, 36, 70),
+	ExitStone = Color3.fromRGB(52, 44, 74),
+	-- Divers
+	Ink = Color3.fromRGB(28, 31, 58), -- encre bleu nuit : tous les contours (jamais de noir pur)
+	White = Color3.fromRGB(255, 255, 255),
+	Metal = Color3.fromRGB(46, 50, 66),
+	Steel = Color3.fromRGB(150, 156, 170),
+	LampGlow = Color3.fromRGB(255, 216, 150), -- globe chaud des lampadaires
+	Laser = Color3.fromRGB(255, 40, 52),
+	LensOff = Color3.fromRGB(90, 24, 30), -- lentille éteinte (BaseDefenseService l'allume)
+	Danger = Color3.fromRGB(230, 60, 68),
+	Magic = Color3.fromRGB(122, 92, 255),
+	Marble = Color3.fromRGB(236, 233, 246),
+	MagicDeep = Color3.fromRGB(96, 62, 214),
+	Shop = Color3.fromRGB(61, 139, 255),
+	Index = Color3.fromRGB(240, 70, 74),
+	Money = Color3.fromRGB(47, 203, 85),
 }
 
 -- Emplacements dans une base (repère local, -Z = entrée)
@@ -185,7 +209,7 @@ end
 
 -- Repère LOGIQUE invisible et debout (rotation sans roulis) : pour Spawn et
 -- ShortcutLanding, le personnage téléporté prend sa rotation. Un cylindre (couché
--- sur X puis tourné) le coucherait : le disque visible est une pièce séparée.
+-- sur X puis tourné) le coucherait.
 local function marker(parent, name, size: Vector3, cf: CFrame)
 	return make("Part", parent, name, size, cf, C.White, Enum.Material.SmoothPlastic, {
 		Transparency = 1,
@@ -262,9 +286,10 @@ local function addPrompt(
 end
 
 ---------------------------------------------------------------------------
--- Textes (style du genre : Luckiest Guy / Fredoka One, contours noirs épais)
+-- Textes (docs/ART_DIRECTION.md) : Fredoka One en casse normale, blanc à contour
+-- encre bleu nuit
 ---------------------------------------------------------------------------
-local LUCKIEST = Font.fromEnum(Enum.Font.LuckiestGuy)
+local FREDOKA = Font.fromEnum(Enum.Font.FredokaOne)
 
 local function addStroke(parent: Instance, thickness: number, color: Color3?)
 	local stroke = Instance.new("UIStroke")
@@ -303,24 +328,26 @@ local function addText(
 	label.BackgroundTransparency = 1
 	label.Position = position
 	label.Size = size
-	label.FontFace = LUCKIEST
+	label.FontFace = FREDOKA
 	label.TextScaled = true
 	label.TextColor3 = color
 	label.Text = text
 	label.Parent = parent
-	addStroke(label, strokeThickness)
+	if strokeThickness > 0 then
+		addStroke(label, strokeThickness)
+	end
 	return label
 end
 
--- Étiquette flottante : texte seul, blanc à contour noir (mis à jour par PlotController)
+-- Étiquette flottante : texte seul, blanc à contour encre (mise à jour par PlotController)
 local function addLabel(parent: BasePart, text: string, offset: number)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "Label"
-	gui.Size = UDim2.fromOffset(230, 46)
+	gui.Size = UDim2.fromOffset(210, 40)
 	gui.StudsOffsetWorldSpace = Vector3.new(0, offset, 0)
-	gui.MaxDistance = 80
+	gui.MaxDistance = 70
 	gui.LightInfluence = 0
-	addText(gui, "Text", text, C.White, UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), 3)
+	addText(gui, "Text", text, C.White, UDim2.fromScale(0, 0), UDim2.fromScale(1, 1), 2.5)
 	gui.Parent = parent
 end
 
@@ -361,10 +388,6 @@ local function rand(a: number, b: number): number
 	return a + (seed / 2147483648) * (b - a)
 end
 
-local function pick<T>(list: { T }): T
-	return list[math.clamp(math.floor(rand(1, #list + 1)), 1, #list)]
-end
-
 ---------------------------------------------------------------------------
 -- Positions des bases
 ---------------------------------------------------------------------------
@@ -380,14 +403,14 @@ function MapBuilder.GetPlotCFrame(index: number): CFrame
 end
 
 ---------------------------------------------------------------------------
--- Île
+-- Île : gazon (Grass), falaises rocheuses, bordure de pierres
 ---------------------------------------------------------------------------
 local function buildIsland(map: Folder)
 	local island = Instance.new("Model")
 	island.Name = "Island"
 	local R = MapBuilder.ISLAND_RADIUS
 
-	cylinder(island, "Ground", 6, R * 2, CFrame.new(0, -3, 0), C.Grass, Enum.Material.Plastic)
+	cylinder(island, "Ground", 6, R * 2, CFrame.new(0, -3, 0), C.Grass, Enum.Material.Grass)
 	cylinder(island, "Cliff", 22, R * 2 - 6, CFrame.new(0, -16, 0), C.Dirt, Enum.Material.Rock)
 	cylinder(island, "CliffLow", 30, R * 2 - 70, CFrame.new(0, -40, 0), C.Cliff, Enum.Material.Rock)
 	cylinder(island, "CliffBottom", 30, R * 2 - 220, CFrame.new(0, -66, 0), C.CliffDark, Enum.Material.Rock)
@@ -408,7 +431,7 @@ local function buildIsland(map: Folder)
 		)
 	end
 
-	-- Bordure rocheuse continue (empêche de tomber dans le vide)
+	-- Bordure de pierres continue (empêche de tomber dans le vide)
 	local rimCount = 56
 	for i = 1, rimCount do
 		local angle = (i / rimCount) * math.pi * 2
@@ -416,11 +439,11 @@ local function buildIsland(map: Folder)
 		block(
 			island,
 			"Rim",
-			Vector3.new(chord * 1.35, rand(5, 8), rand(5, 8)),
+			Vector3.new(chord * 1.35, rand(5, 7), rand(5, 7)),
 			CFrame.new(math.cos(angle) * (R - 4), 1.5, math.sin(angle) * (R - 4))
 				* CFrame.Angles(0, -angle + math.pi / 2, 0)
-				* CFrame.Angles(rand(-0.15, 0.15), 0, rand(-0.1, 0.1)),
-			if i % 2 == 0 then C.Stone else C.Stone:Lerp(C.StoneDark, 0.25),
+				* CFrame.Angles(rand(-0.12, 0.12), 0, rand(-0.08, 0.08)),
+			if i % 2 == 0 then C.Rock else C.RockDark,
 			Enum.Material.Slate
 		)
 	end
@@ -429,7 +452,8 @@ local function buildIsland(map: Folder)
 end
 
 ---------------------------------------------------------------------------
--- Rift (nord) : portail géant d'où sortent les créatures, face au tapis (+Z)
+-- Rift (nord) : portail géant d'où sortent les créatures, face au tapis (+Z).
+-- Anneau de pierre sombre (Slate) + vortex néon : le seul grand élément lumineux
 ---------------------------------------------------------------------------
 -- Cristal néon : prisme carré tourné de 45° (section en losange) terminé par une
 -- pointe : un cube posé sur un sommet (diagonale verticale) à moitié enfoncé dans le
@@ -459,27 +483,6 @@ local function crystal(parent: Instance, name: string, length: number, width: nu
 	)
 end
 
--- Amas irrégulier de cristaux qui jaillissent d'un même point (+Y local de cf) :
--- un grand presque droit, les autres plus courts et inclinés
-local function crystalCluster(
-	parent: Instance,
-	name: string,
-	cf: CFrame,
-	count: number,
-	minLength: number,
-	maxLength: number,
-	color: Color3
-)
-	for i = 1, count do
-		local length = rand(minLength, maxLength) * (if i == 1 then 1 else rand(0.45, 0.7))
-		-- Le premier presque droit, les autres en éventail autour (alternés gauche/droite)
-		local fan = if i == 1 then 0 else (if i % 2 == 0 then 1 else -1) * rand(0.35, 0.6)
-		local tilt = CFrame.Angles(rand(-0.25, 0.25), 0, fan) * CFrame.Angles(0, rand(0, math.pi), 0)
-		local width = math.clamp(length * 0.26, 1.3, 2.8)
-		crystal(parent, name, length, width, cf * CFrame.new(fan * 1.6, -0.8, rand(-0.6, 0.6)) * tilt, color)
-	end
-end
-
 local function buildRift(map: Folder)
 	local rift = Instance.new("Model")
 	rift.Name = "Rift"
@@ -490,18 +493,17 @@ local function buildRift(map: Folder)
 	local frame = CFrame.new(center) -- plan du portail : XY, face à ±Z
 	local floor = Vector3.new(0, 0, center.Z)
 
-	-- Estrade au ras du tapis, liseré lumineux recoloré selon la dimension
+	-- Estrade de pierre sombre au ras du tapis, fin liseré lumineux (recoloré selon la
+	-- dimension)
 	cylinder(
 		rift,
-		"DaisGlow",
+		"RoadGlow",
 		0.42,
-		R * 2 + 19,
+		R * 2 + 18.6,
 		CFrame.new(floor + Vector3.new(0, 0.21, 0)),
 		C.Rift,
 		Enum.Material.Neon,
-		{
-			Name = "RoadGlow",
-		}
+		noCollide({ CastShadow = false })
 	)
 	cylinder(
 		rift,
@@ -513,16 +515,13 @@ local function buildRift(map: Folder)
 		Enum.Material.Slate
 	)
 
-	-- Fissures lumineuses sur l'estrade et dans le dallage autour
-	for i = 1, 16 do
-		local angle = (i / 16) * math.pi * 2 + rand(-0.12, 0.12)
-		local r0, r1 = R - 1, rand(R + 10, R + 20)
+	-- Quelques fissures lumineuses sur l'estrade, jamais en travers du tapis
+	for _, degrees in { 28, 152, 64, 116, -30, -150 } do
+		local angle = math.rad(degrees)
+		local bend = if degrees > 90 or degrees < -90 then -0.14 else 0.14
+		local r0, r1 = R - 2, R + 7.5
 		local mid = (r0 + r1) / 2
-		local bend = rand(-0.18, 0.18)
-		-- Aucune fissure en travers du tapis (elle dépasserait de 0,01 et couperait les
-		-- chevrons) : on saute celles qui partent vers +Z dans l'axe du tapis
-		local overCarpet = math.sin(angle) > 0 and math.abs(math.cos(angle)) < 0.42
-		for s = 0, if overCarpet then -1 else 1 do
+		for s = 0, 1 do
 			local a = angle + bend * s
 			local from = (if s == 0 then r0 else mid)
 			local to = (if s == 0 then mid else r1)
@@ -531,90 +530,57 @@ local function buildRift(map: Folder)
 			block(
 				rift,
 				"Crack",
-				Vector3.new(0.9 - s * 0.35, 0.08, (p1 - p0).Magnitude + 0.5),
+				Vector3.new(0.75 - s * 0.3, 0.06, (p1 - p0).Magnitude + 0.4),
 				lookAt((p0 + p1) / 2, p1),
 				C.Rift,
 				Enum.Material.Neon,
-				noCollide()
+				noCollide({ CastShadow = false })
 			)
 		end
 	end
 
-	-- Piliers de roche qui encadrent la faille, couronnés de cristaux
+	-- Deux pylônes de pierre taillée qui encadrent la faille : socle, fût en trois
+	-- tronçons légèrement effilés séparés par des bandeaux clairs, chapiteau, cristaux
 	for _, side in { -1, 1 } do
 		local x = side * (R + 8)
-		local y = 0
-		for level = 1, 6 do
-			local height = rand(6.5, 9)
-			local width = 9 - level * 0.45
-			block(
-				rift,
-				"Pillar",
-				Vector3.new(width + rand(-0.6, 0.6), height, width + rand(-0.6, 0.6)),
-				CFrame.new(x + side * rand(-0.3, 0.8), y + height / 2, center.Z + rand(-0.6, 0.6))
-					* CFrame.Angles(rand(-0.06, 0.06), rand(0, 1.5), side * -0.035 * level),
-				if level % 2 == 0 then C.RiftStoneLight else C.RiftStone,
-				Enum.Material.Slate
-			)
-			y += height * 0.85
+		local function stone(name: string, size: Vector3, y: number, color: Color3)
+			block(rift, name, size, CFrame.new(x, y + size.Y / 2, center.Z), color, Enum.Material.Slate)
 		end
-		-- Couronne de cristaux au sommet (penchés vers l'extérieur et vers le tapis)
-		crystalCluster(
-			rift,
-			"RiftTooth",
-			CFrame.new(x, y + 0.6, center.Z) * CFrame.Angles(0.25, 0, side * -0.45),
-			3,
-			5,
-			9,
-			C.RiftAccent
-		)
-		-- Rochers flottants au-dessus
-		for i = 1, 3 do
-			block(
-				rift,
-				"FloatingRock",
-				Vector3.new(rand(1.6, 3.2), rand(1.6, 3.2), rand(1.6, 3.2)),
-				CFrame.new(x + side * rand(-1, 4), y + 7 + i * 3.4, center.Z + rand(-3, 3))
-					* CFrame.Angles(rand(0, 3), rand(0, 3), rand(0, 3)),
-				C.RiftStoneLight,
-				Enum.Material.Slate,
-				noCollide()
-			)
+		stone("PillarBase", Vector3.new(10, 2, 10), 0, C.RiftStoneLight)
+		local y = 2
+		for level, width in { 7.8, 7.1, 6.4 } do
+			stone("Pillar", Vector3.new(width, 9.4, width), y, C.RiftStone)
+			y += 9.4
+			if level < 3 then
+				stone("PillarBand", Vector3.new(width + 0.5, 0.7, width + 0.5), y - 0.35, C.RiftStoneLight)
+			end
 		end
-		-- Amas de cristaux au pied du pilier, côté tapis
-		crystalCluster(
-			rift,
-			"RiftTooth",
-			CFrame.new(x - side * 1.5, 0.3, center.Z + 6.5) * CFrame.Angles(0.35, 0, side * 0.3),
-			4,
-			3.5,
-			7.5,
-			C.RiftAccent
-		)
-		-- Éboulis sombres au pied
-		for i = 1, 3 do
-			local size = rand(2.2, 3.8)
-			block(
+		stone("PillarCap", Vector3.new(7.8, 1.3, 7.8), y, C.RiftStoneLight)
+		y += 1.3
+		-- Trois cristaux : un grand droit, deux plus courts en éventail
+		local top = CFrame.new(x, y, center.Z) * CFrame.Angles(0.08, 0, side * -0.2)
+		for i, spec in { { 0, 9.5, 2.6 }, { 0.5, 6, 1.9 }, { -0.5, 6.5, 2 } } do
+			local fan = spec[1]
+			crystal(
 				rift,
-				"RiftRubble",
-				Vector3.new(size, size * 0.7, size),
-				CFrame.new(x + side * rand(2, 6), size * 0.3, center.Z + rand(-6, 7))
-					* CFrame.Angles(rand(-0.4, 0.4), rand(0, 3), rand(-0.4, 0.4)),
-				if i == 2 then C.RiftStoneLight else C.RiftStone,
-				Enum.Material.Slate
+				"RiftTooth",
+				spec[2],
+				spec[3],
+				top * CFrame.new(fan * 2.2, -0.4, if i == 1 then 0 else 0.4) * CFrame.Angles(0, 0, -fan),
+				C.RiftAccent
 			)
 		end
 	end
 
-	-- Anneau de la faille : néon intérieur + épais bord de pierre sombre
-	local segments = 48
+	-- Anneau : lèvre néon intérieure + épais bord de pierre sombre
+	local segments = 32
 	for i = 1, segments do
 		local angle = (i / segments) * math.pi * 2
 		local around = frame * CFrame.Angles(0, 0, angle)
 		block(
 			rift,
 			"RingSegment",
-			Vector3.new(3.4, 3.2, 3.6),
+			Vector3.new(2 * math.pi * R / segments * 1.12, 3, 3.4),
 			around * CFrame.new(0, R, 0),
 			C.Rift,
 			Enum.Material.Neon,
@@ -623,41 +589,47 @@ local function buildRift(map: Folder)
 		block(
 			rift,
 			"RingBack",
-			Vector3.new(3.7, 3, 5.4),
-			around * CFrame.new(0, R + 2.9, 0),
+			Vector3.new(2 * math.pi * (R + 3) / segments * 1.12, 3.2, 5.2),
+			around * CFrame.new(0, R + 3, 0),
 			C.RiftStone,
 			Enum.Material.Slate,
 			noCollide()
 		)
 	end
-	-- Amas de cristaux irréguliers sur le haut de l'anneau (la faille a l'air
-	-- « déchirée ») : jamais sur les côtés, où se tiennent les piliers
-	for k, base in { -0.8, -0.28, 0.2, 0.74 } do
-		local angle = base + rand(-0.08, 0.08)
-		crystalCluster(
+	-- Couronne de cinq cristaux symétriques sur le haut de l'anneau
+	for k, spec in { { -50, 7.5, 2 }, { -25, 10, 2.3 }, { 0, 13.5, 2.7 }, { 25, 10, 2.3 }, { 50, 7.5, 2 } } do
+		crystal(
 			rift,
 			"RiftTooth",
-			frame * CFrame.Angles(0, 0, angle) * CFrame.new(0, R + 3.6, 1.4) * CFrame.Angles(0.4, 0, 0),
-			3 + (k % 2),
-			6.5,
-			if k == 2 then 14 else 10.5,
+			spec[2],
+			spec[3],
+			frame * CFrame.Angles(0, 0, math.rad(spec[1])) * CFrame.new(0, R + 4, if k % 2 == 0 then 0.6 else -0.6),
 			C.RiftAccent
 		)
 	end
 
 	-- Vortex en couches, du bord lumineux au centre sombre (effet de profondeur)
 	local core = disc(rift, "Core", 0.6, R * 2 - 1, frame, C.Rift, Enum.Material.Neon, noCollide())
-	disc(rift, "RiftDeep", 0.8, R * 1.5, frame, C.Rift:Lerp(C.Ink, DEEP_SHADE), Enum.Material.Neon, noCollide())
+	disc(
+		rift,
+		"RiftDeep",
+		0.8,
+		R * 1.5,
+		frame,
+		C.Rift:Lerp(Color3.new(0, 0, 0), DEEP_SHADE),
+		Enum.Material.Neon,
+		noCollide()
+	)
 	disc(rift, "Swirl", 1.0, R * 1.62, frame, Color3.fromRGB(255, 220, 120), Enum.Material.ForceField, noCollide())
-	disc(rift, "Abyss", 1.2, R * 0.98, frame, Color3.fromRGB(26, 8, 44), Enum.Material.SmoothPlastic, noCollide())
+	disc(rift, "Abyss", 1.2, R * 0.98, frame, Color3.fromRGB(26, 12, 44), Enum.Material.SmoothPlastic, noCollide())
 	-- Petit tourbillon blanc autour de l'œil : la lumière au bout du tunnel
 	disc(rift, "Swirl2", 1.3, R * 0.42, frame, C.White, Enum.Material.ForceField, noCollide())
-	ball(rift, "Eye", 3.6, frame, C.White, Enum.Material.Neon, noCollide())
+	ball(rift, "Eye", 3.4, frame, C.White, Enum.Material.Neon, noCollide())
 
 	-- Bras de la spirale, devant le vortex : ils tournent autour de l'axe de la
 	-- Rift (RiftVisualController) et s'affinent vers le centre
-	local arms, steps = 3, 8
-	local winding = 2.6 -- radians d'enroulement du bord au centre
+	local arms, steps = 3, 6
+	local winding = 2.4 -- radians d'enroulement du bord au centre
 	local function spiralPoint(arm: number, f: number): Vector3
 		local radius = R * (0.9 - 0.6 * f)
 		local angle = (arm / arms) * math.pi * 2 + f * winding
@@ -673,7 +645,7 @@ local function buildRift(map: Folder)
 			block(
 				rift,
 				"SwirlArm",
-				Vector3.new((p1 - p0).Magnitude + 0.6, 1.9 - 1.2 * s / steps, 0.25),
+				Vector3.new((p1 - p0).Magnitude + 0.6, 1.7 - 1.1 * s / steps, 0.25),
 				frame * CFrame.fromMatrix(mid, along, up, Vector3.zAxis),
 				C.RiftAccent,
 				Enum.Material.Neon,
@@ -682,8 +654,8 @@ local function buildRift(map: Folder)
 		end
 	end
 
-	pointLight(core, core.Color, 60, 4)
-	local particles = sparkle(core, Color3.fromRGB(255, 160, 60), 50, 1.8, 14)
+	pointLight(core, core.Color, 60, 2.5)
+	local particles = sparkle(core, Color3.fromRGB(255, 160, 60), 30, 1.5, 14)
 	particles.Name = "RiftParticles"
 	particles.SpreadAngle = Vector2.new(35, 35)
 	particles.EmissionDirection = Enum.NormalId.Left -- -X local du disque = +Z monde : vers le tapis
@@ -693,7 +665,7 @@ local function buildRift(map: Folder)
 		rift,
 		"RiftBeam",
 		400,
-		11,
+		10,
 		CFrame.new(center.X, center.Y + R + 4 + 200, center.Z),
 		Color3.fromRGB(255, 140, 60),
 		Enum.Material.Neon,
@@ -702,13 +674,13 @@ local function buildRift(map: Folder)
 
 	-- Éclats en orbite horizontale autour de la faille, au-delà des piliers (animés
 	-- côté client)
-	for i = 1, 12 do
+	for i = 1, 8 do
 		-- Décalés d'un demi-pas : aucun éclat pile devant l'œil en mode édition
-		local angle = ((i - 0.5) / 12) * math.pi * 2
+		local angle = ((i - 0.5) / 8) * math.pi * 2
 		block(
 			rift,
 			"Shard",
-			Vector3.new(1.6, 3.6, 1.6),
+			Vector3.new(1.5, 3.4, 1.5),
 			CFrame.new(center + Vector3.new(math.cos(angle) * SHARD_ORBIT, 0, math.sin(angle) * SHARD_ORBIT))
 				* CFrame.Angles(rand(0, 3), rand(0, 3), rand(0, 3)),
 			C.RiftAccent,
@@ -722,11 +694,9 @@ local function buildRift(map: Folder)
 end
 
 ---------------------------------------------------------------------------
--- Esplanade pavée autour de la Rift : les tableaux de classement et l'apparition
--- neutre y sont posés, les trottoirs y débouchent
+-- Esplanade en béton autour de la Rift : les tableaux de classement, les stands
+-- du marché et l'apparition neutre y sont posés, les trottoirs y débouchent
 ---------------------------------------------------------------------------
-local PLAZA_RADIUS = 58
-
 local function buildPlaza(map: Folder)
 	local plaza = Instance.new("Folder")
 	plaza.Name = "Plaza"
@@ -738,8 +708,8 @@ local function buildPlaza(map: Folder)
 		0.36,
 		PLAZA_RADIUS * 2 + 2,
 		CFrame.new(floor + Vector3.new(0, 0.18, 0)),
-		C.White,
-		Enum.Material.SmoothPlastic
+		C.Curb,
+		Enum.Material.Concrete
 	)
 	cylinder(
 		plaza,
@@ -748,23 +718,401 @@ local function buildPlaza(map: Folder)
 		PLAZA_RADIUS * 2,
 		CFrame.new(floor + Vector3.new(0, 0.19, 0)),
 		C.Sidewalk,
-		Enum.Material.SmoothPlastic
+		Enum.Material.Concrete
 	)
-	-- Joints rayonnants (dalles en éventail autour de la Rift)
-	for k = 0, 23 do
-		local angle = math.rad(k * 15 + 7.5)
+	-- Joints rayonnants (grandes dalles en éventail autour de l'estrade)
+	for k = 0, 15 do
+		local angle = math.rad(k * 22.5 + 11.25)
 		local direction = Vector3.new(math.sin(angle), 0, math.cos(angle))
-		local r0, r1 = 27, PLAZA_RADIUS - 1
-		local mid = floor + direction * (r0 + r1) / 2 + Vector3.new(0, 0.39, 0)
+		local r0, r1 = 31.5, PLAZA_RADIUS - 0.5
+		local mid = floor + direction * (r0 + r1) / 2 + Vector3.new(0, 0.385, 0)
 		block(
 			plaza,
 			"PlazaJoint",
-			Vector3.new(0.3, 0.03, r1 - r0),
+			Vector3.new(0.22, 0.03, r1 - r0),
 			lookAt(mid, mid + direction),
-			C.SidewalkJoint,
+			C.Joint,
 			Enum.Material.SmoothPlastic,
 			noCollide({ CastShadow = false })
 		)
+	end
+end
+
+---------------------------------------------------------------------------
+-- Stands du marché (façon Grow a Garden) : étal en bois, toile rayée, enseigne.
+-- Le ProximityPrompt du comptoir porte l'attribut Panel : StandController ouvre
+-- la fenêtre correspondante côté client.
+---------------------------------------------------------------------------
+type StandDef = {
+	Name: string,
+	Title: string,
+	Panel: string,
+	Stripe: Color3,
+	Position: Vector3,
+	Facing: Vector3,
+	Side: number, -- -1 = ouest, 1 = est (tonneaux et caisses côté extérieur)
+}
+
+local STANDS: { StandDef } = {
+	{
+		Name = "ShopStand",
+		Title = "🛒 Boutique",
+		Panel = "Shop",
+		Stripe = C.Shop,
+		Position = Vector3.new(-31, 0, -161),
+		Facing = Vector3.new(0, 0, -128),
+		Side = -1,
+	},
+	{
+		Name = "IndexStand",
+		Title = "📖 Index",
+		Panel = "Index",
+		Stripe = C.Index,
+		Position = Vector3.new(31, 0, -161),
+		Facing = Vector3.new(0, 0, -128),
+		Side = 1,
+	},
+}
+
+local STAND_WIDTH = 13
+local STAND_DEPTH = 7
+
+local function buildStandSign(sign: BasePart, title: string, color: Color3)
+	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
+		local surface = Instance.new("SurfaceGui")
+		surface.Name = if face == Enum.NormalId.Front then "StandGui" else "StandGuiBack"
+		surface.Face = face
+		surface.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		surface.PixelsPerStud = 24
+		surface.LightInfluence = 0
+		local panel = Instance.new("Frame")
+		panel.Name = "Panel"
+		panel.Position = UDim2.fromOffset(6, 6)
+		panel.Size = UDim2.new(1, -12, 1, -12)
+		panel.BackgroundColor3 = Color3.new(1, 1, 1)
+		panel.Parent = surface
+		addCorner(panel, UDim.new(0, 12))
+		addStroke(panel, 3)
+		addGradient(panel, color:Lerp(C.White, 0.12), color:Lerp(C.Ink, 0.1))
+		addText(panel, "Text", title, C.White, UDim2.fromScale(0.05, 0.1), UDim2.fromScale(0.9, 0.8), 3)
+		surface.Parent = sign
+	end
+end
+
+local function buildStand(parent: Instance, def: StandDef)
+	local model = Instance.new("Model")
+	model.Name = def.Name
+	model:SetAttribute("Panel", def.Panel)
+	local cf = lookAt(def.Position, Vector3.new(def.Facing.X, def.Position.Y, def.Facing.Z))
+	local function at(x: number, y: number, z: number): CFrame
+		return cf * CFrame.new(x, y, z)
+	end
+	local SW, SD = STAND_WIDTH, STAND_DEPTH
+	local deckTop = 0.8
+	local counterHeight = 3.2
+	local counterZ = -SD / 2 + 1.1 -- comptoir à l'avant (-Z local = côté client)
+	local yFront, yBack = 8.2, 10.4 -- bords de la toile (pente vers l'avant)
+	local signHeight = 2.8
+
+	-- Plancher, comptoir en planches et plateau en bois sombre
+	block(
+		model,
+		"StandDeck",
+		Vector3.new(SW + 1.2, 0.5, SD + 1.2),
+		at(0, deckTop - 0.25, 0),
+		C.Wood,
+		Enum.Material.WoodPlanks
+	)
+	local counter = block(
+		model,
+		"Counter",
+		Vector3.new(SW - 0.6, counterHeight, 2),
+		at(0, deckTop + counterHeight / 2, counterZ),
+		C.WoodLight,
+		Enum.Material.WoodPlanks
+	)
+	block(
+		model,
+		"CounterTop",
+		Vector3.new(SW + 0.2, 0.36, 2.7),
+		at(0, deckTop + counterHeight + 0.18, counterZ - 0.05),
+		C.WoodDark,
+		Enum.Material.Wood
+	)
+	-- Poteaux d'angle : ceux du fond montent jusqu'en haut de l'enseigne
+	for _, sx in { -1, 1 } do
+		local x = sx * (SW / 2 - 0.35)
+		block(
+			model,
+			"StandPost",
+			Vector3.new(0.7, yFront - deckTop, 0.7),
+			at(x, (yFront + deckTop) / 2, -SD / 2 + 0.35),
+			C.WoodDark,
+			Enum.Material.Wood
+		)
+		local backTop = yBack + signHeight + 0.4
+		block(
+			model,
+			"StandPost",
+			Vector3.new(0.7, backTop - deckTop, 0.7),
+			at(x, (backTop + deckTop) / 2, SD / 2 - 0.35),
+			C.WoodDark,
+			Enum.Material.Wood
+		)
+	end
+	-- Fond de l'étal
+	block(
+		model,
+		"StandBack",
+		Vector3.new(SW - 0.7, yBack - deckTop - 0.3, 0.35),
+		at(0, (yBack - 0.3 + deckTop) / 2, SD / 2 - 0.35),
+		C.WoodLight,
+		Enum.Material.WoodPlanks
+	)
+
+	-- Toile rayée en pente (haut à l'arrière, bas à l'avant) et lambrequin à festons
+	local stripes = 8
+	local zBack, zFront = SD / 2 + 0.4, -SD / 2 - 0.9
+	local run, rise = zBack - zFront, yBack - yFront
+	local slope = math.atan2(rise, run)
+	local length = math.sqrt(run * run + rise * rise)
+	local spanX = SW + 0.8
+	local stripeWidth = spanX / stripes
+	for i = 1, stripes do
+		local x = -spanX / 2 + (i - 0.5) * stripeWidth
+		local color = if i % 2 == 1 then def.Stripe else C.White
+		block(
+			model,
+			"Awning",
+			Vector3.new(stripeWidth + 0.02, 0.24, length),
+			at(x, (yBack + yFront) / 2, (zBack + zFront) / 2) * CFrame.Angles(-slope, 0, 0),
+			color,
+			Enum.Material.Fabric,
+			noCollide()
+		)
+		-- Bande verticale devant, demi-disques derrière elle : seuls les festons dépassent
+		block(
+			model,
+			"Valance",
+			Vector3.new(stripeWidth + 0.02, 1, 0.16),
+			at(x, yFront - 0.5, zFront - 0.06),
+			color,
+			Enum.Material.Fabric,
+			noCollide({ CastShadow = false })
+		)
+		disc(
+			model,
+			"Valance",
+			0.14,
+			stripeWidth,
+			at(x, yFront - 1, zFront + 0.04),
+			color,
+			Enum.Material.Fabric,
+			noCollide({ CastShadow = false })
+		)
+	end
+
+	-- Enseigne entre les poteaux du fond, au-dessus de la toile
+	local sign = block(
+		model,
+		"StandSign",
+		Vector3.new(SW - 1.1, signHeight, 0.4),
+		at(0, yBack + 0.2 + signHeight / 2, SD / 2 - 0.35),
+		C.White,
+		Enum.Material.SmoothPlastic,
+		noCollide()
+	)
+	buildStandSign(sign, def.Title, def.Stripe)
+
+	-- Marchandises sur le comptoir
+	local top = deckTop + counterHeight + 0.36
+	if def.Panel == "Shop" then
+		-- Paquets cadeaux (ruban blanc) et pile de pièces d'or
+		local gifts = { { X = -4, Size = 1.5, Color = C.Index }, { X = -2.2, Size = 1.2, Color = C.Money } }
+		for k, gift in gifts do
+			local size = gift.Size
+			local giftCF = at(gift.X, top + size / 2, counterZ) * CFrame.Angles(0, 0.25 * k, 0)
+			block(model, "Gift", Vector3.one * size, giftCF, gift.Color, Enum.Material.SmoothPlastic)
+			block(
+				model,
+				"Ribbon",
+				Vector3.new(size + 0.06, size + 0.06, 0.3),
+				giftCF,
+				C.White,
+				Enum.Material.SmoothPlastic,
+				noCollide()
+			)
+			block(
+				model,
+				"Ribbon",
+				Vector3.new(0.3, size + 0.06, size + 0.06),
+				giftCF,
+				C.White,
+				Enum.Material.SmoothPlastic,
+				noCollide()
+			)
+		end
+		for k = 0, 2 do
+			cylinder(
+				model,
+				"Coin",
+				0.3,
+				1.2,
+				at(3.4 + (k % 2) * 0.15, top + 0.15 + k * 0.32, counterZ),
+				C.Gold,
+				Enum.Material.SmoothPlastic,
+				noCollide()
+			)
+		end
+	else
+		-- Grand livre ouvert (l'Index des créatures) et pile de livres
+		local bookCF = at(-2.4, top, counterZ) * CFrame.Angles(0, 0.1, 0)
+		block(
+			model,
+			"BookCover",
+			Vector3.new(4.4, 0.2, 2.6),
+			bookCF * CFrame.new(0, 0.1, 0),
+			C.Index,
+			Enum.Material.SmoothPlastic
+		)
+		for _, sx in { -1, 1 } do
+			block(
+				model,
+				"BookPage",
+				Vector3.new(2, 0.24, 2.3),
+				bookCF * CFrame.new(sx * 1.02, 0.32, 0) * CFrame.Angles(0, 0, sx * 0.1),
+				C.White,
+				Enum.Material.SmoothPlastic,
+				noCollide()
+			)
+		end
+		local books =
+			{ { Color = C.Shop, Turn = 0.2 }, { Color = C.Money, Turn = -0.15 }, { Color = C.Gold, Turn = 0.1 } }
+		for k, book in books do
+			block(
+				model,
+				"Book",
+				Vector3.new(1.9 - k * 0.15, 0.42, 2.4 - k * 0.15),
+				at(3.4, top + 0.21 + (k - 1) * 0.42, counterZ) * CFrame.Angles(0, book.Turn, 0),
+				book.Color,
+				Enum.Material.SmoothPlastic
+			)
+		end
+	end
+
+	-- Tonneaux et caisses groupés contre le flanc extérieur de l'étal
+	local outer = -def.Side -- X local du flanc extérieur (le repère suit l'orientation)
+	for k, spot in { { 0.4, -1.6 }, { 0.6, 1.2 } } do
+		local barrelCF = at(outer * (SW / 2 + 1.9 + spot[1]), 0, spot[2])
+		cylinder(model, "Barrel", 3, 2.4, barrelCF * CFrame.new(0, 1.5, 0), C.Wood, Enum.Material.Wood)
+		for _, y in { 0.7, 2.3 } do
+			cylinder(
+				model,
+				"BarrelBand",
+				0.25,
+				2.5,
+				barrelCF * CFrame.new(0, y, 0),
+				C.Metal,
+				Enum.Material.Metal,
+				noCollide()
+			)
+		end
+		if k == 2 then
+			-- Caisses empilées à côté du second tonneau
+			local crateCF = barrelCF * CFrame.new(outer * 0.4, 0, 2.9) * CFrame.Angles(0, 0.2, 0)
+			block(
+				model,
+				"Crate",
+				Vector3.one * 2.3,
+				crateCF * CFrame.new(0, 1.15, 0),
+				C.WoodLight,
+				Enum.Material.WoodPlanks
+			)
+			block(
+				model,
+				"Crate",
+				Vector3.one * 1.8,
+				crateCF * CFrame.new(0.1, 3.2, 0.1) * CFrame.Angles(0, -0.35, 0),
+				C.WoodLight,
+				Enum.Material.WoodPlanks
+			)
+		end
+	end
+
+	-- Prompt du comptoir : StandController ouvre la fenêtre « Panel »
+	local prompt = addPrompt(counter, "StandPrompt", "Ouvrir", def.Title, 0, Enum.KeyCode.E)
+	prompt.MaxActivationDistance = 12
+	prompt:SetAttribute("Panel", def.Panel)
+
+	model.PrimaryPart = counter
+	model.Parent = parent
+end
+
+local function buildStands(map: Folder)
+	local stands = Instance.new("Folder")
+	stands.Name = "Stands"
+	stands.Parent = map
+	for _, def in STANDS do
+		buildStand(stands, def)
+	end
+end
+
+-- Arbre « nuage » : tronc + une grosse boule de feuillage et deux plus petites
+-- (style unique de tous les arbres de la map)
+local function tree(parent: Instance, position: Vector3, scale: number, light: boolean?)
+	local height = 7 * scale
+	cylinder(
+		parent,
+		"Trunk",
+		height + 1.5 * scale,
+		1.5 * scale,
+		CFrame.new(position + Vector3.new(0, (height + 1.5 * scale) / 2, 0)),
+		C.Trunk,
+		Enum.Material.Wood
+	)
+	local leaves = if light then C.LeavesLight else C.Leaves
+	local crown = position + Vector3.new(0, height + 3 * scale, 0)
+	ellipsoid(
+		parent,
+		"Leaves",
+		Vector3.new(10.5, 8.8, 10.5) * scale,
+		CFrame.new(crown),
+		leaves,
+		Enum.Material.Grass,
+		{ CanCollide = false }
+	)
+	local turn = rand(0, math.pi * 2)
+	for i = 1, 2 do
+		local a = turn + i * math.pi * 0.85
+		ellipsoid(
+			parent,
+			"Leaves",
+			Vector3.new(6.6, 5.8, 6.6) * scale,
+			CFrame.new(crown + Vector3.new(math.cos(a) * 4.2, -1.2 + i * 1.6, math.sin(a) * 4.2) * scale),
+			leaves:Lerp(C.LeavesLight, 0.4),
+			Enum.Material.Grass,
+			{ CanCollide = false }
+		)
+	end
+end
+
+-- Deux jardinières rondes avec un arbre, derrière les piliers de la Rift : elles
+-- encadrent le portail et habillent le fond de l'esplanade
+local function buildPlanters(map: Folder)
+	local plaza = map:FindFirstChild("Plaza") :: Folder
+	for _, side in { -1, 1 } do
+		local center = Vector3.new(side * 46, 0, MapBuilder.RIFT_Z - 17)
+		cylinder(plaza, "Planter", 1.2, 11, CFrame.new(center + Vector3.new(0, 0.6, 0)), C.Curb, Enum.Material.Concrete)
+		cylinder(
+			plaza,
+			"PlanterSoil",
+			1.24,
+			9.8,
+			CFrame.new(center + Vector3.new(0, 0.62, 0)),
+			C.Grass,
+			Enum.Material.Grass
+		)
+		tree(plaza, center + Vector3.new(0, 1.2, 0), 1.15)
 	end
 end
 
@@ -779,54 +1127,34 @@ local function buildExit(map: Folder)
 	local frame = CFrame.new(center)
 	local floor = Vector3.new(0, 0, center.Z)
 
-	cylinder(exit, "ExitDaisGlow", 0.36, 31, CFrame.new(floor + Vector3.new(0, 0.18, 0)), C.Exit, Enum.Material.Neon)
-	cylinder(exit, "ExitDais", 0.44, 29, CFrame.new(floor + Vector3.new(0, 0.22, 0)), C.StoneDark, Enum.Material.Slate)
+	-- Petite place en béton au bout du tapis (même dalle que les trottoirs)
+	cylinder(exit, "ExitRim", 0.36, 32, CFrame.new(floor + Vector3.new(0, 0.18, 0)), C.Curb, Enum.Material.Concrete)
+	cylinder(exit, "ExitDais", 0.4, 30, CFrame.new(floor + Vector3.new(0, 0.2, 0)), C.Sidewalk, Enum.Material.Concrete)
 
-	local segments = 28
+	local segments = 20
 	for i = 1, segments do
 		local angle = (i / segments) * math.pi * 2
 		local rotation = frame * CFrame.Angles(0, 0, angle)
 		block(
 			exit,
 			"ExitRing",
-			Vector3.new(2.6, 2.8, 3.4),
-			rotation * CFrame.new(0, EXIT_RADIUS + 0.6, 0),
-			C.ExitStone,
+			Vector3.new(2 * math.pi * (EXIT_RADIUS + 1) / segments * 1.12, 2.4, 2.6),
+			rotation * CFrame.new(0, EXIT_RADIUS + 1, 0),
+			if i % 2 == 0 then C.RiftStoneLight else C.RiftStone,
 			Enum.Material.Slate,
 			noCollide()
 		)
-		block(
-			exit,
-			"ExitRim",
-			Vector3.new(2.3, 0.7, 3.6),
-			rotation * CFrame.new(0, EXIT_RADIUS - 0.9, 0),
-			C.Exit,
-			Enum.Material.Neon,
-			noCollide()
-		)
-		-- Éclats de pierre sombre sur le pourtour (silhouette brisée)
-		if i % 3 == 0 and math.cos(angle) > -0.4 then
-			local length = rand(1.6, 2.8)
-			block(
-				exit,
-				"ExitSpike",
-				Vector3.new(2, length, 2),
-				rotation
-					* CFrame.new(0, EXIT_RADIUS + 1.8 + length / 2, 0)
-					* CFrame.Angles(rand(-0.4, 0.4), rand(0, 1), rand(-0.3, 0.3)),
-				C.ExitStone,
-				Enum.Material.Slate,
-				noCollide()
-			)
-		end
 	end
+	-- Fin cercle violet (sans néon : réservé à la Rift) : un disque à peine plus
+	-- grand que le cœur sombre
+	disc(exit, "ExitGlow", 0.3, EXIT_RADIUS * 2 - 0.2, frame, C.Exit, Enum.Material.SmoothPlastic, noCollide())
 	disc(
 		exit,
 		"ExitCore",
-		0.5,
-		EXIT_RADIUS * 2 - 1.5,
+		0.6,
+		EXIT_RADIUS * 2 - 2.2,
 		frame,
-		Color3.fromRGB(26, 10, 44),
+		Color3.fromRGB(26, 12, 44),
 		Enum.Material.SmoothPlastic,
 		noCollide()
 	)
@@ -840,12 +1168,12 @@ local function buildExit(map: Folder)
 		Enum.Material.ForceField,
 		noCollide()
 	)
-	ball(exit, "ExitEye", 1.6, frame, Color3.fromRGB(200, 150, 255), Enum.Material.Neon, noCollide())
+	ball(exit, "ExitEye", 1.4, frame, Color3.fromRGB(226, 204, 255), Enum.Material.SmoothPlastic, noCollide())
 	exit.Parent = map
 end
 
 ---------------------------------------------------------------------------
--- Chemin (tapis rouge en ligne droite)
+-- Chemin : tapis rouge en tissu, bordures or, trottoirs en béton, lampadaires
 ---------------------------------------------------------------------------
 -- Renvoie la liste ordonnée des waypoints du chemin principal : de la sortie de la
 -- Rift jusqu'au portail de sortie, en ligne droite le long du tapis (sens +Z).
@@ -864,40 +1192,65 @@ function MapBuilder.ComputePathPoints(): { Vector3 }
 	return points
 end
 
--- Chevron lumineux "flèche" posé sur le tapis, pointant dans "direction"
-local function chevron(parent: Instance, position: Vector3, direction: Vector3, index: number)
-	local base = lookAt(position, position + direction)
+-- Flèche peinte sur le tapis : chevron blanc semi-transparent (pas de néon) qui
+-- pointe vers +Z. Deux bras à 45° + un carré sur la pointe qui comble exactement
+-- l'encoche entre eux : aucune pièce ne se recouvre, la transparence reste uniforme.
+local CHEVRON_ARM = 3.6 -- longueur d'un bras
+local CHEVRON_WIDTH = 1 -- largeur de la bande peinte
+local function chevron(parent: Instance, apex: Vector3, index: number)
+	local props = noCollide({ Transparency = 0.35, CastShadow = false })
+	local s45 = math.sqrt(0.5)
+	local w, length = CHEVRON_WIDTH, CHEVRON_ARM
+	-- Coin intérieur de la pointe (sur l'axe) : la pointe extérieure est w·√2 plus loin
+	local tip = apex - Vector3.new(0, 0, w * math.sqrt(2))
 	for _, side in { -1, 1 } do
+		local along = Vector3.new(side * s45, 0, -s45) -- vers l'arrière et l'extérieur
+		local across = Vector3.new(side * s45, 0, s45) -- largeur de la bande
 		local arm = block(
 			parent,
 			"Chevron",
-			Vector3.new(1, 0.06, 4.6),
-			-- Les deux bras se rejoignent à l'avant (-Z local) : la pointe indique le sens de marche
-			base * CFrame.new(side * 1.45, 0, -0.9) * CFrame.Angles(0, side * math.rad(40), 0),
-			C.RiftAccent,
-			Enum.Material.Neon,
-			noCollide()
+			Vector3.new(w, 0.05, length),
+			CFrame.fromMatrix(
+				tip + along * (length / 2) + across * (w / 2),
+				across,
+				Vector3.yAxis,
+				across:Cross(Vector3.yAxis)
+			),
+			C.White,
+			Enum.Material.SmoothPlastic,
+			props
 		)
 		arm:SetAttribute("Index", index)
 	end
+	local cap = block(
+		parent,
+		"Chevron",
+		Vector3.new(w, 0.05, w),
+		CFrame.new(tip + Vector3.new(0, 0, w * s45)) * CFrame.Angles(0, math.rad(45), 0),
+		C.White,
+		Enum.Material.SmoothPlastic,
+		props
+	)
+	cap:SetAttribute("Index", index)
 end
 
--- Lampadaire : pied sombre, globe lumineux recoloré selon la dimension
+-- Lampadaire : pied et fût en métal sombre, globe chaud (néon : un des trois seuls
+-- usages autorisés avec la Rift et les lasers)
 local function lamp(parent: Instance, base: Vector3)
-	cylinder(parent, "LampBase", 1, 1.8, CFrame.new(base + Vector3.new(0, 0.5, 0)), C.Metal, Enum.Material.Metal)
-	cylinder(parent, "LampPost", 11, 0.7, CFrame.new(base + Vector3.new(0, 5.5, 0)), C.Metal, Enum.Material.Metal)
-	cylinder(parent, "LampCollar", 0.5, 1.6, CFrame.new(base + Vector3.new(0, 10.9, 0)), C.Gold, Enum.Material.Metal)
+	cylinder(parent, "LampBase", 0.8, 1.7, CFrame.new(base + Vector3.new(0, 0.4, 0)), C.Metal, Enum.Material.Metal)
+	cylinder(parent, "LampPost", 10.6, 0.6, CFrame.new(base + Vector3.new(0, 5.6, 0)), C.Metal, Enum.Material.Metal)
+	cylinder(parent, "LampCollar", 0.45, 1.4, CFrame.new(base + Vector3.new(0, 10.9, 0)), C.Gold, Enum.Material.Metal)
 	local globe = ball(
 		parent,
 		"Lamp",
-		2.4,
+		2.3,
 		CFrame.new(base + Vector3.new(0, 12.2, 0)),
-		C.RiftAccent,
+		C.LampGlow,
 		Enum.Material.Neon,
 		noCollide()
 	)
-	cylinder(parent, "LampCap", 0.4, 1.2, CFrame.new(base + Vector3.new(0, 13.5, 0)), C.Metal, Enum.Material.Metal)
-	pointLight(globe, C.RiftAccent, 22, 1.2)
+	cylinder(parent, "LampCap", 0.4, 1.3, CFrame.new(base + Vector3.new(0, 13.45, 0)), C.Metal, Enum.Material.Metal)
+	pointLight(globe, C.LampGlow, 18, 0.7)
 end
 
 local function buildRoad(map: Folder)
@@ -910,8 +1263,9 @@ local function buildRoad(map: Folder)
 	local length = z1 - z0
 	local mid = (z0 + z1) / 2
 	local half = MapBuilder.CARPET_WIDTH / 2
+	local inner, outer = MapBuilder.SIDEWALK_INNER, MapBuilder.SIDEWALK_OUTER
 
-	-- Le tapis rouge sort du vortex de la Rift et entre dans le portail de sortie
+	-- Le tapis rouge (tissu) sort du vortex de la Rift et entre dans le portail de sortie
 	local carpetStart, carpetEnd = MapBuilder.RIFT_Z + 2, MapBuilder.EXIT_Z - 2
 	block(
 		road,
@@ -919,20 +1273,21 @@ local function buildRoad(map: Folder)
 		Vector3.new(MapBuilder.CARPET_WIDTH, y, carpetEnd - carpetStart),
 		CFrame.new(0, y / 2, (carpetStart + carpetEnd) / 2),
 		C.Carpet,
-		Enum.Material.SmoothPlastic
+		Enum.Material.Fabric
 	)
+
+	-- Ouvertures de la bordure blanche devant chaque entrée de base (le trottoir
+	-- continue sans marche jusqu'au seuil)
+	local gaps = {}
+	for _, z in MapBuilder.PLOT_ROWS_Z do
+		table.insert(gaps, { z - (OPENING / 2 + 2), z + (OPENING / 2 + 2) })
+	end
+	table.sort(gaps, function(a, b)
+		return a[1] < b[1]
+	end)
+
 	for _, side in { -1, 1 } do
-		-- Liseré rouge foncé le long des bordures (donne du relief)
-		block(
-			road,
-			"CarpetTrim",
-			Vector3.new(0.9, 0.04, carpetEnd - carpetStart),
-			CFrame.new(side * (half - 1.2), y + 0.02, (carpetStart + carpetEnd) / 2),
-			C.CarpetDark,
-			Enum.Material.SmoothPlastic,
-			noCollide()
-		)
-		-- Bordure or
+		-- Bordure or légèrement surélevée entre le tapis et le trottoir
 		block(
 			road,
 			"CarpetBorder",
@@ -941,8 +1296,7 @@ local function buildRoad(map: Folder)
 			C.Gold,
 			Enum.Material.SmoothPlastic
 		)
-		-- Trottoir + bordure blanche côté herbe
-		local inner, outer = MapBuilder.SIDEWALK_INNER, MapBuilder.SIDEWALK_OUTER
+		-- Trottoir en béton
 		local width = outer - inner
 		block(
 			road,
@@ -950,31 +1304,46 @@ local function buildRoad(map: Folder)
 			Vector3.new(width, FLOOR_TOP, length),
 			CFrame.new(side * (inner + width / 2), FLOOR_TOP / 2, mid),
 			C.Sidewalk,
-			Enum.Material.SmoothPlastic
+			Enum.Material.Concrete
 		)
-		block(
-			road,
-			"Curb",
-			Vector3.new(0.9, FLOOR_TOP + 0.35, length + 0.9),
-			CFrame.new(side * (outer - 0.45), (FLOOR_TOP + 0.35) / 2, mid),
-			C.White,
-			Enum.Material.SmoothPlastic
-		)
-		-- Joints de dalles
-		local joints = math.floor(length / 7)
-		for k = 1, joints - 1 do
+		-- Bordure claire côté herbe, interrompue devant les entrées
+		local from = z0 - 0.45
+		local segments = {}
+		for _, gap in gaps do
+			table.insert(segments, { from, gap[1] })
+			from = gap[2]
+		end
+		table.insert(segments, { from, z1 + 0.45 })
+		for _, segment in segments do
+			local a, b = segment[1], segment[2]
 			block(
 				road,
-				"SidewalkJoint",
-				Vector3.new(width - 0.9, 0.04, 0.3),
-				CFrame.new(side * (inner + (width - 0.9) / 2), FLOOR_TOP + 0.01, z0 + k * (length / joints)),
-				C.SidewalkJoint,
-				Enum.Material.SmoothPlastic,
-				noCollide()
+				"Curb",
+				Vector3.new(0.9, FLOOR_TOP + 0.35, b - a),
+				CFrame.new(side * (outer - 0.45), (FLOOR_TOP + 0.35) / 2, (a + b) / 2),
+				C.Curb,
+				Enum.Material.Concrete
 			)
 		end
+		-- Joints de dalles (une dalle de 10 x 11,7 studs : 3 entre deux lampadaires)
+		local slab = 35 / 3
+		local count = math.floor(length / slab)
+		for k = 1, count do
+			local z = z0 + k * slab
+			if z < z1 - 1 then
+				block(
+					road,
+					"SidewalkJoint",
+					Vector3.new(width - 0.9, 0.03, 0.2),
+					CFrame.new(side * (inner + (width - 0.9) / 2), FLOOR_TOP + 0.01, z),
+					C.Joint,
+					Enum.Material.SmoothPlastic,
+					noCollide({ CastShadow = false })
+				)
+			end
+		end
 	end
-	-- Bouts des bordures (embouts arrondis or)
+	-- Embouts arrondis des bordures or
 	for _, z in { z0, z1 } do
 		for _, side in { -1, 1 } do
 			cylinder(
@@ -989,183 +1358,69 @@ local function buildRoad(map: Folder)
 		end
 	end
 
-	-- Chevrons (Index croissant dans le sens de marche : la lumière court vers la sortie)
+	-- Flèches peintes (Index croissant dans le sens de marche : RiftVisualController
+	-- y fait courir une légère vague d'opacité vers la sortie)
 	local index = 0
-	local z = z0 + 4
-	while z <= z1 - 4 do
-		chevron(road, Vector3.new(0, y + 0.04, z), Vector3.zAxis, index)
+	local z = z0 + 7
+	while z <= z1 - 3 do
+		chevron(road, Vector3.new(0, y + 0.025, z), index)
 		index += 1
-		z += 8
+		z += 18
 	end
 
-	-- Lampadaires tous les 35 studs, entre les entrées des bases
+	-- Lampadaires tous les 35 studs, de part et d'autre de chaque entrée
 	for k = 0, 9 do
 		local lampZ = -157.5 + k * 35
 		for _, side in { -1, 1 } do
-			lamp(road, Vector3.new(side * (MapBuilder.SIDEWALK_OUTER - 0.45), FLOOR_TOP + 0.35, lampZ))
+			lamp(road, Vector3.new(side * (outer - 0.45), FLOOR_TOP + 0.35, lampZ))
 		end
 	end
 end
 
 ---------------------------------------------------------------------------
--- Décor
+-- Décor groupé : bosquets d'arbres d'un seul style sur le pourtour, quelques
+-- rochers, buissons le long des murs des bases (traversables), îlots à l'horizon
 ---------------------------------------------------------------------------
-local LEAF_COLORS = {
-	Color3.fromRGB(52, 172, 62),
-	Color3.fromRGB(36, 150, 70),
-	Color3.fromRGB(96, 200, 56),
-	Color3.fromRGB(28, 138, 84),
-}
--- Fruits : touches de couleur vive sur certains arbres (au lieu de feuillages pastel)
-local FRUIT_COLORS = {
-	Color3.fromRGB(235, 36, 48),
-	Color3.fromRGB(255, 140, 20),
-	Color3.fromRGB(255, 214, 30),
-}
-
-local function tree(parent: Instance, position: Vector3, scale: number, color: Color3?)
-	local height = 8 * scale
-	cylinder(
-		parent,
-		"Trunk",
-		height + 2,
-		1.8 * scale,
-		CFrame.new(position + Vector3.new(0, (height + 2) / 2, 0)),
-		C.Wood,
-		Enum.Material.Wood
-	)
-	local leaves = color or pick(LEAF_COLORS)
-	-- Feuillage en « nuage » : une grosse boule + trois plus petites
+local function bush(parent: Instance, position: Vector3, scale: number)
 	ellipsoid(
 		parent,
-		"Leaves",
-		Vector3.new(11, 9, 11) * scale,
-		CFrame.new(position + Vector3.new(0, height + 3 * scale, 0)),
-		leaves,
-		Enum.Material.SmoothPlastic
+		"Bush",
+		Vector3.new(4.6, 3.6, 4.2) * scale,
+		CFrame.new(position + Vector3.new(0, 1.2 * scale, 0)),
+		C.Bush,
+		Enum.Material.Grass,
+		-- Décor traversable : un buisson collé à un mur servirait de marchepied
+		noCollide()
 	)
-	for i = 1, 3 do
-		local a = (i / 3) * math.pi * 2 + rand(0, 1)
-		local size = rand(5.5, 7) * scale
-		ellipsoid(
-			parent,
-			"Leaves",
-			Vector3.new(size, size * 0.85, size),
-			CFrame.new(
-				position
-					+ Vector3.new(math.cos(a) * 4 * scale, height + rand(4.5, 6.5) * scale, math.sin(a) * 4 * scale)
-			),
-			leaves:Lerp(C.White, 0.12),
-			Enum.Material.SmoothPlastic
-		)
-	end
-	-- Un arbre sur trois porte des fruits, posés sur la grosse boule de feuillage
-	if color == nil and rand(0, 1) < 0.35 then
-		local fruit = pick(FRUIT_COLORS)
-		local center = position + Vector3.new(0, height + 3 * scale, 0)
-		for _ = 1, 7 do
-			local a = rand(0, math.pi * 2)
-			local e = rand(-0.35, 0.55)
-			local direction =
-				Vector3.new(math.cos(a) * math.cos(e) * 5.4, math.sin(e) * 4.4, math.sin(a) * math.cos(e) * 5.4)
-			ball(
-				parent,
-				"Fruit",
-				1.15 * scale,
-				CFrame.new(center + direction * scale),
-				fruit,
-				Enum.Material.SmoothPlastic,
-				noCollide()
-			)
-		end
-	end
+	ellipsoid(
+		parent,
+		"Bush",
+		Vector3.new(3.4, 2.8, 3.2) * scale,
+		CFrame.new(position + Vector3.new(1.7 * scale, 0.9 * scale, 0.5 * scale)),
+		C.BushLight,
+		Enum.Material.Grass,
+		noCollide()
+	)
 end
 
-local function bush(parent: Instance, position: Vector3, scale: number)
-	for i = 1, 3 do
-		local size = rand(3.5, 5) * scale
-		ellipsoid(
-			parent,
-			"Bush",
-			Vector3.new(size, size * 0.8, size),
-			CFrame.new(position + Vector3.new(rand(-1.8, 1.8) * scale, size * 0.3, rand(-1.8, 1.8) * scale)),
-			if i == 2 then C.Leaves:Lerp(C.White, 0.1) else C.Leaves,
-			Enum.Material.SmoothPlastic,
-			-- Décor traversable : un buisson collé à un mur servirait de marchepied
-			noCollide()
-		)
-	end
-end
-
+-- Rocher : galets de Slate arrondis, à moitié enterrés
 local function rock(parent: Instance, position: Vector3, scale: number)
 	for i = 1, 3 do
-		local size = Vector3.new(rand(4, 7), rand(2.5, 4.5), rand(4, 6)) * scale * (if i == 1 then 1 else 0.6)
+		local size = Vector3.new(rand(5, 7), rand(3, 4.5), rand(4.5, 6)) * scale * (if i == 1 then 1 else 0.55)
+		local offset = if i == 1 then Vector3.zero else Vector3.new(rand(-3.5, 3.5), 0, rand(-3.5, 3.5)) * scale
 		ellipsoid(
 			parent,
 			"Rock",
 			size,
-			CFrame.new(position + Vector3.new(rand(-2.5, 2.5) * scale, size.Y * 0.3, rand(-2.5, 2.5) * scale))
-				* CFrame.Angles(0, rand(0, 3), rand(-0.2, 0.2)),
-			if i == 1 then C.Stone else C.Stone:Lerp(C.White, 0.15),
-			Enum.Material.SmoothPlastic
-		)
-	end
-end
-
-local FLOWER_COLORS = {
-	Color3.fromRGB(255, 60, 80),
-	Color3.fromRGB(255, 220, 40),
-	Color3.fromRGB(255, 255, 255),
-	Color3.fromRGB(255, 90, 190),
-	Color3.fromRGB(70, 150, 255),
-}
-
-local function flowers(parent: Instance, position: Vector3)
-	local color = pick(FLOWER_COLORS)
-	for _ = 1, 3 do
-		local offset = Vector3.new(rand(-1.4, 1.4), 0, rand(-1.4, 1.4))
-		cylinder(
-			parent,
-			"Stem",
-			1,
-			0.2,
-			CFrame.new(position + offset + Vector3.new(0, 0.5, 0)),
-			C.GrassDark,
-			Enum.Material.SmoothPlastic,
-			noCollide()
-		)
-		ball(
-			parent,
-			"Flower",
-			0.85,
-			CFrame.new(position + offset + Vector3.new(0, 1.1, 0)),
-			color,
-			Enum.Material.SmoothPlastic,
-			noCollide()
-		)
-	end
-end
-
--- Touffe d'herbe plus foncée (trois brins inclinés)
-local function tuft(parent: Instance, position: Vector3)
-	for i = 1, 3 do
-		local a = (i / 3) * math.pi * 2 + rand(0, 1)
-		local h = rand(1.2, 2)
-		block(
-			parent,
-			"Tuft",
-			Vector3.new(0.35, h, 0.35),
-			CFrame.new(position + Vector3.new(math.cos(a) * 0.3, h / 2 - 0.1, math.sin(a) * 0.3))
-				* CFrame.Angles(math.sin(a) * 0.35, 0, -math.cos(a) * 0.35),
-			C.GrassDark,
-			Enum.Material.SmoothPlastic,
-			noCollide({ CastShadow = false })
+			CFrame.new(position + offset + Vector3.new(0, size.Y * 0.28, 0)) * CFrame.Angles(0, rand(0, 3), 0),
+			if i == 1 then C.Rock else C.RockDark,
+			Enum.Material.Slate
 		)
 	end
 end
 
 local function floatingIsland(parent: Instance, position: Vector3, radius: number)
-	cylinder(parent, "IslandTop", 3, radius * 2, CFrame.new(position), C.Grass, Enum.Material.Plastic)
+	cylinder(parent, "IslandTop", 3, radius * 2, CFrame.new(position), C.Grass, Enum.Material.Grass)
 	cylinder(
 		parent,
 		"IslandRock",
@@ -1184,7 +1439,7 @@ local function floatingIsland(parent: Instance, position: Vector3, radius: numbe
 		C.Cliff,
 		Enum.Material.Rock
 	)
-	tree(parent, position + Vector3.new(0, 1.5, 0), radius / 12, C.Leaves)
+	tree(parent, position + Vector3.new(0, 1.5, 0), radius / 13)
 end
 
 -- Vrai si la position tombe dans une base ou devant son entrée (marge comprise)
@@ -1202,17 +1457,18 @@ local function insideAnyPlot(position: Vector3, margin: number): boolean
 	return false
 end
 
--- Emplacement libre pour un décor : sur l'île, hors du tapis et de ses bouts,
+-- Emplacement libre pour un décor : sur l'île, hors du tapis et des trottoirs,
 -- hors des bases, de l'esplanade de la Rift et du portail de sortie
 local function isFree(position: Vector3, margin: number): boolean
 	local x, z = position.X, position.Z
-	if math.sqrt(x * x + z * z) > MapBuilder.ISLAND_RADIUS - 14 - margin then
+	if math.sqrt(x * x + z * z) > MapBuilder.ISLAND_RADIUS - 18 - margin then
 		return false
 	end
 	if math.abs(x) < MapBuilder.SIDEWALK_OUTER + 6 + margin then
 		return false
 	end
-	if z < MapBuilder.RIFT_Z + 52 + margin and z > MapBuilder.RIFT_Z - 30 - margin and math.abs(x) < 66 + margin then
+	local fromRift = Vector3.new(x, 0, z - MapBuilder.RIFT_Z).Magnitude
+	if fromRift < PLAZA_RADIUS + 4 + margin then
 		return false
 	end
 	if z > MapBuilder.EXIT_Z - 40 - margin and math.abs(x) < 32 + margin then
@@ -1221,83 +1477,88 @@ local function isFree(position: Vector3, margin: number): boolean
 	return not insideAnyPlot(position, margin)
 end
 
-local function randomFreePosition(minRadius: number, maxRadius: number, margin: number): Vector3?
-	for _ = 1, 60 do
-		local angle = rand(0, math.pi * 2)
-		local radius = rand(minRadius, maxRadius)
-		local position = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
-		if isFree(position, margin) then
-			return position
-		end
-	end
-	return nil
-end
+-- Bosquets (centre, nombre d'arbres, rayon) : sur le pourtour, jamais sur les
+-- passages ni devant les bases. Placés à la main pour encadrer la Rift et la sortie
+local GROVES = {
+	{ Center = Vector3.new(-168, 0, -52), Count = 6, Spread = 15 },
+	{ Center = Vector3.new(-172, 0, 78), Count = 6, Spread = 15 },
+	{ Center = Vector3.new(-236, 0, 8), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(170, 0, -34), Count = 6, Spread = 15 },
+	{ Center = Vector3.new(176, 0, 92), Count = 5, Spread = 14 },
+	{ Center = Vector3.new(238, 0, -6), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(-108, 0, -214), Count = 6, Spread = 14 },
+	{ Center = Vector3.new(112, 0, -210), Count = 6, Spread = 14 },
+	{ Center = Vector3.new(-48, 0, -268), Count = 4, Spread = 10 },
+	{ Center = Vector3.new(52, 0, -266), Count = 4, Spread = 10 },
+	{ Center = Vector3.new(-104, 0, 206), Count = 5, Spread = 14 },
+	{ Center = Vector3.new(110, 0, 200), Count = 5, Spread = 14 },
+	{ Center = Vector3.new(-46, 0, 252), Count = 4, Spread = 11 },
+	{ Center = Vector3.new(50, 0, 254), Count = 4, Spread = 11 },
+	{ Center = Vector3.new(-212, 0, -150), Count = 4, Spread = 12 },
+	{ Center = Vector3.new(214, 0, 146), Count = 4, Spread = 12 },
+	{ Center = Vector3.new(-204, 0, 162), Count = 4, Spread = 12 },
+	{ Center = Vector3.new(210, 0, -150), Count = 4, Spread = 12 },
+	-- Ceinture d'arbres le long de la bordure (entre les bosquets ci-dessus)
+	{ Center = Vector3.new(262, 0, 56), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(178, 0, 200), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(-178, 0, 200), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(-262, 0, 56), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(-262, 0, -56), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(-170, 0, -206), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(170, 0, -206), Count = 5, Spread = 13 },
+	{ Center = Vector3.new(262, 0, -56), Count = 5, Spread = 13 },
+}
+
+-- Rochers : près des bosquets, pas au milieu des pelouses
+local ROCKS = {
+	{ Position = Vector3.new(-150, 0, -32), Scale = 1.2 },
+	{ Position = Vector3.new(-222, 0, 30), Scale = 1 },
+	{ Position = Vector3.new(154, 0, -60), Scale = 1.3 },
+	{ Position = Vector3.new(222, 0, 20), Scale = 0.9 },
+	{ Position = Vector3.new(-86, 0, -232), Scale = 1.1 },
+	{ Position = Vector3.new(88, 0, 222), Scale = 1.2 },
+	{ Position = Vector3.new(-150, 0, 104), Scale = 1 },
+	{ Position = Vector3.new(160, 0, 118), Scale = 1.1 },
+}
 
 local function buildDecor(map: Folder)
 	local decor = Instance.new("Folder")
 	decor.Name = "Decor"
 	decor.Parent = map
 
-	-- Nuances de gazon
-	for _ = 1, 22 do
-		local position = randomFreePosition(40, 270, 6)
-		if position then
-			cylinder(
-				decor,
-				"GrassPatch",
-				0.06,
-				rand(14, 30),
-				CFrame.new(position + Vector3.new(0, 0.02, 0)),
-				C.GrassDark,
-				Enum.Material.Plastic,
-				noCollide({ CastShadow = false })
-			)
-		end
-	end
-	for _ = 1, 70 do
-		local position = randomFreePosition(30, 280, 1)
-		if position then
-			tuft(decor, position)
-		end
-	end
-	for _ = 1, 55 do
-		local position = randomFreePosition(30, 280, 2)
-		if position then
-			flowers(decor, position)
+	for g, grove in GROVES do
+		local planted, attempts = 0, 0
+		while planted < grove.Count and attempts < 40 do
+			attempts += 1
+			-- Premier arbre (le plus grand) au centre, les autres en couronne irrégulière
+			local angle = attempts * 2.4 + g
+			local offset = if attempts == 1
+				then Vector3.zero
+				else Vector3.new(math.cos(angle), 0, math.sin(angle)) * rand(grove.Spread * 0.55, grove.Spread)
+			local position = grove.Center + offset
+			if isFree(position, 6) then
+				planted += 1
+				tree(decor, position, if attempts == 1 then rand(1.25, 1.4) else rand(0.85, 1.2), planted % 3 == 0)
+			end
 		end
 	end
 
-	-- Bosquets sur le pourtour de l'île
-	local planted = 0
-	local attempts = 0
-	while planted < 46 and attempts < 600 do
-		attempts += 1
-		local position = randomFreePosition(120, 278, 7)
-		if position then
-			planted += 1
-			tree(decor, position, rand(0.85, 1.35))
+	for _, spec in ROCKS do
+		if isFree(spec.Position, 3) then
+			rock(decor, spec.Position, spec.Scale)
 		end
 	end
-	-- Arbres qui encadrent la Rift et le portail de sortie (derrière, hors de l'axe)
-	for _, side in { -1, 1 } do
-		tree(decor, Vector3.new(side * 86, 0, MapBuilder.RIFT_Z - 6), 1.5, C.Leaves)
-		tree(decor, Vector3.new(side * 104, 0, MapBuilder.RIFT_Z + 26), 1.2)
-		tree(decor, Vector3.new(side * 44, 0, MapBuilder.EXIT_Z + 12), 1.2, C.Leaves)
-		tree(decor, Vector3.new(side * 60, 0, MapBuilder.EXIT_Z - 18), 1)
-	end
-	-- Rochers
-	for _ = 1, 22 do
-		local position = randomFreePosition(60, 280, 5)
-		if position then
-			rock(decor, position, rand(0.8, 1.6))
+
+	-- Buissons le long des murs extérieurs des bases : devant la façade (de part et
+	-- d'autre du seuil) et derrière le mur du fond
+	for index = 1, MapBuilder.PLOT_COUNT do
+		local plotCFrame = MapBuilder.GetPlotCFrame(index)
+		local front = -MapBuilder.PLOT_DEPTH / 2
+		for _, x in { -27.5, -21.5, 21.5, 27.5 } do
+			bush(decor, plotCFrame:PointToWorldSpace(Vector3.new(x, 0, front - 2.1)), 0.8)
 		end
-	end
-	-- Buissons dans les espaces entre les bases, côté trottoir
-	for _, z in { -70, 0, 70 } do
-		for _, side in { -1, 1 } do
-			bush(decor, Vector3.new(side * 27, 0, z), 1)
-			bush(decor, Vector3.new(side * 52, 0, z + rand(-1, 1)), 0.9)
-			bush(decor, Vector3.new(side * 80, 0, z + rand(-1, 1)), 0.9)
+		for _, x in { -21, -7, 7, 21 } do
+			bush(decor, plotCFrame:PointToWorldSpace(Vector3.new(x, 0, MapBuilder.PLOT_DEPTH / 2 + 2.6)), 1.05)
 		end
 	end
 
@@ -1357,6 +1618,7 @@ end
 local BOARD_SIZE = Vector2.new(26, 19)
 local BOARD_PPS = 30
 
+-- Fenêtre blanche à en-tête coloré (jetons de l'interface, docs/ART_DIRECTION.md)
 local function buildBoardGui(panel: BasePart, title: string, color: Color3)
 	local surface = Instance.new("SurfaceGui")
 	surface.Name = "BoardGui"
@@ -1364,35 +1626,32 @@ local function buildBoardGui(panel: BasePart, title: string, color: Color3)
 	surface.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	surface.PixelsPerStud = BOARD_PPS
 	surface.LightInfluence = 0
-	-- Fenêtre bleu vif à contour noir (jetons « Fenêtre » de l'interface)
 	local background = Instance.new("Frame")
 	background.Name = "Background"
-	background.Position = UDim2.fromOffset(12, 12)
-	background.Size = UDim2.new(1, -24, 1, -24)
+	background.Position = UDim2.fromOffset(10, 10)
+	background.Size = UDim2.new(1, -20, 1, -20)
 	background.BackgroundColor3 = Color3.new(1, 1, 1)
 	background.Parent = surface
-	addCorner(background, UDim.new(0, 26))
-	addStroke(background, 8)
-	addGradient(background, Color3.fromRGB(66, 160, 255), Color3.fromRGB(30, 92, 220))
-	-- En-tête coloré (vert = argent, rouge = vols)
+	addCorner(background, UDim.new(0, 24))
+	addStroke(background, 6)
+	addGradient(background, C.White, Color3.fromRGB(241, 244, 250))
 	local header = Instance.new("Frame")
 	header.Name = "Header"
-	header.Position = UDim2.fromOffset(14, 12)
-	header.Size = UDim2.new(1, -28, 0, 84)
+	header.Position = UDim2.fromOffset(0, 0)
+	header.Size = UDim2.new(1, 0, 0, 92)
 	header.BackgroundColor3 = Color3.new(1, 1, 1)
 	header.Parent = background
-	addCorner(header, UDim.new(0, 20))
-	addStroke(header, 5)
-	addGradient(header, color:Lerp(C.White, 0.2), color:Lerp(C.Ink, 0.15))
-	addText(header, "Title", title, C.White, UDim2.fromOffset(16, 6), UDim2.new(1, -32, 1, -12), 5)
+	addCorner(header, UDim.new(0, 24))
+	addGradient(header, color:Lerp(C.White, 0.1), color:Lerp(C.Ink, 0.12))
+	addText(header, "Title", title, C.White, UDim2.fromOffset(20, 10), UDim2.new(1, -40, 1, -20), 3.5)
 	local rows = Instance.new("Frame")
 	rows.Name = "Rows"
 	rows.BackgroundTransparency = 1
-	rows.Position = UDim2.fromOffset(22, 112)
-	rows.Size = UDim2.new(1, -44, 1, -128)
+	rows.Position = UDim2.fromOffset(22, 108)
+	rows.Size = UDim2.new(1, -44, 1, -124)
 	rows.Parent = background
 	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0, 5)
+	layout.Padding = UDim.new(0, 6)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = rows
 	surface.Parent = panel
@@ -1403,127 +1662,108 @@ local function buildBoards(map: Folder)
 	boards.Name = "Boards"
 	boards.Parent = map
 	local definitions = {
-		{ Name = "MoneyBoard", Side = -1, Title = "💰 LES PLUS RICHES", Color = Color3.fromRGB(40, 200, 70) },
-		{ Name = "StealsBoard", Side = 1, Title = "🦹 MAÎTRES VOLEURS", Color = Color3.fromRGB(255, 60, 60) },
+		{ Name = "MoneyBoard", Side = -1, Title = "💰 Les plus riches", Color = Color3.fromRGB(47, 190, 80) },
+		{ Name = "StealsBoard", Side = 1, Title = "🦹 Maîtres voleurs", Color = Color3.fromRGB(240, 70, 74) },
 	}
-	local plinthTop = 1.2
-	local centerY = plinthTop + 0.6 + BOARD_SIZE.Y / 2
+	local plinthTop = 1
+	-- Panneaux surélevés (façon enseigne) : lisibles de loin, au-dessus des stands
+	local bottom = 12.5
+	local centerY = bottom + BOARD_SIZE.Y / 2
+	local top = bottom + BOARD_SIZE.Y
 	for _, def in definitions do
 		-- Hors de l'emprise des piliers de la Rift (X = ±30), en bord d'esplanade
 		local base = Vector3.new(def.Side * 54, 0, MapBuilder.RIFT_Z + 16)
 		-- Légèrement tourné vers le centre du tapis
 		local facing = lookAt(base, Vector3.new(0, 0, MapBuilder.RIFT_Z + 95))
-		block(
-			boards,
-			"BoardPlinth",
-			Vector3.new(BOARD_SIZE.X + 7, plinthTop, 7),
-			facing * CFrame.new(0, plinthTop / 2, 0.4),
-			C.White,
-			Enum.Material.SmoothPlastic
-		)
-		block(
-			boards,
-			"BoardPlinthTrim",
-			Vector3.new(BOARD_SIZE.X + 7.4, 0.4, 7.4),
-			facing * CFrame.new(0, 0.2, 0.4),
-			def.Color,
-			Enum.Material.SmoothPlastic
-		)
 		local cf = facing * CFrame.new(0, centerY, 0)
-		local panel = block(
-			boards,
-			def.Name,
-			Vector3.new(BOARD_SIZE.X, BOARD_SIZE.Y, 0.8),
-			cf,
-			C.Ink,
-			Enum.Material.SmoothPlastic
-		)
-		-- Dos coloré (vu depuis l'arrière) et poteaux blancs
-		block(
-			boards,
-			"BoardBack",
-			Vector3.new(BOARD_SIZE.X + 1.2, BOARD_SIZE.Y + 1.2, 0.6),
-			cf * CFrame.new(0, 0, 0.65),
-			def.Color,
-			Enum.Material.SmoothPlastic
-		)
+		local panel =
+			block(boards, def.Name, Vector3.new(BOARD_SIZE.X, BOARD_SIZE.Y, 1), cf, C.Ink, Enum.Material.SmoothPlastic)
+		-- Deux poteaux en bois sombre sur socles de béton, traverse sous le panneau,
+		-- petit toit au-dessus
 		for _, side in { -1, 1 } do
+			local x = side * (BOARD_SIZE.X / 2 + 0.9)
+			block(
+				boards,
+				"BoardPlinth",
+				Vector3.new(3.4, plinthTop, 3.4),
+				facing * CFrame.new(x, plinthTop / 2, 0.2),
+				C.Curb,
+				Enum.Material.Concrete
+			)
 			block(
 				boards,
 				"BoardPost",
-				Vector3.new(2, centerY + BOARD_SIZE.Y / 2 + 1.4 - plinthTop, 2),
-				facing
-					* CFrame.new(
-						side * (BOARD_SIZE.X / 2 + 1.6),
-						(centerY + BOARD_SIZE.Y / 2 + 1.4 + plinthTop) / 2,
-						0.4
-					),
-				C.White,
-				Enum.Material.SmoothPlastic
-			)
-			ball(
-				boards,
-				"BoardLamp",
-				2.6,
-				facing * CFrame.new(side * (BOARD_SIZE.X / 2 + 1.6), centerY + BOARD_SIZE.Y / 2 + 2.6, 0.4),
-				def.Color,
-				Enum.Material.Neon,
-				noCollide()
+				Vector3.new(1.8, top + 1 - plinthTop, 1.8),
+				facing * CFrame.new(x, (top + 1 + plinthTop) / 2, 0.2),
+				C.WoodDark,
+				Enum.Material.Wood
 			)
 		end
-		pointLight(panel, def.Color, 24, 1)
+		block(
+			boards,
+			"BoardBeam",
+			Vector3.new(BOARD_SIZE.X + 1.2, 1, 1.4),
+			facing * CFrame.new(0, bottom - 0.5, 0.2),
+			C.WoodDark,
+			Enum.Material.Wood
+		)
+		block(
+			boards,
+			"BoardRoof",
+			Vector3.new(BOARD_SIZE.X + 4.6, 0.8, 2.8),
+			facing * CFrame.new(0, top + 1.4, 0.2),
+			C.WoodDark,
+			Enum.Material.Wood
+		)
 		buildBoardGui(panel, def.Title, def.Color)
 	end
 end
 
 ---------------------------------------------------------------------------
--- Bases
+-- Bases : sol en planches, murs bas en brique blanc cassé. La couleur d'équipe
+-- n'apparaît que sur le chaperon des murs, l'arche et le panneau.
 ---------------------------------------------------------------------------
--- Grand panneau « BASE DE {Nom} » au-dessus de l'arche (texte écrit par PlotController)
-local SIGN_SIZE = Vector2.new(46, 9)
-local SIGN_PPS = 16
+-- Panneau « Base de {nom} » sur l'arche (texte écrit par PlotController)
+local SIGN_SIZE = Vector2.new(30, 6.4)
+local SIGN_PPS = 20
 
-local function buildSign(model: Model, cf: CFrame, color: Color3): BasePart
-	-- Pièce noire : sa bordure forme le contour épais du panneau
-	local sign = block(
-		model,
-		"Sign",
-		Vector3.new(SIGN_SIZE.X, SIGN_SIZE.Y, 1),
-		cf,
-		C.Ink,
-		Enum.Material.SmoothPlastic,
-		noCollide()
-	)
+local function buildSignGui(sign: BasePart, color: Color3, face: Enum.NormalId, name: string)
 	local surface = Instance.new("SurfaceGui")
-	surface.Name = "SignGui"
-	surface.Face = Enum.NormalId.Front
+	surface.Name = name
+	surface.Face = face
 	surface.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	surface.PixelsPerStud = SIGN_PPS
 	surface.LightInfluence = 0
+	-- Cadre blanc (la pièce), panneau couleur d'équipe à contour encre
 	local panel = Instance.new("Frame")
 	panel.Name = "Panel"
-	panel.Position = UDim2.fromOffset(9, 9)
-	panel.Size = UDim2.new(1, -18, 1, -18)
+	panel.Position = UDim2.fromOffset(8, 8)
+	panel.Size = UDim2.new(1, -16, 1, -16)
 	panel.BackgroundColor3 = Color3.new(1, 1, 1)
 	panel.Parent = surface
-	addCorner(panel, UDim.new(0, 16))
-	addStroke(panel, 4)
-	addGradient(panel, color:Lerp(C.White, 0.22), color:Lerp(C.Ink, 0.12))
-	addText(panel, "Text", "BASE LIBRE", C.White, UDim2.fromScale(0.03, 0.08), UDim2.fromScale(0.94, 0.84), 5)
-	addText(panel, "Status", "", C.White, UDim2.fromScale(0.1, 0.64), UDim2.fromScale(0.8, 0.32), 3)
+	addCorner(panel, UDim.new(0, 14))
+	addStroke(panel, 3)
+	addGradient(panel, color:Lerp(C.White, 0.1), color:Lerp(C.Ink, 0.1))
+	addText(panel, "Text", "Base libre", C.White, UDim2.fromScale(0.04, 0.12), UDim2.fromScale(0.92, 0.76), 3.5)
+	-- Ligne d'état dans une pastille encre (lisible sur toutes les couleurs d'équipe) :
+	-- cachée tant qu'elle est vide (PlotController)
+	local pill = Instance.new("Frame")
+	pill.Name = "StatusPill"
+	pill.AnchorPoint = Vector2.new(0.5, 0)
+	pill.Position = UDim2.fromScale(0.5, 0.6)
+	pill.Size = UDim2.fromScale(0.46, 0.32)
+	pill.BackgroundColor3 = C.Ink
+	pill.BackgroundTransparency = 0.08
+	pill.Visible = false
+	pill.Parent = panel
+	addCorner(pill, UDim.new(0.5, 0))
+	addText(pill, "Status", "", C.White, UDim2.fromScale(0.06, 0.1), UDim2.fromScale(0.88, 0.8), 0)
 	surface.Parent = sign
-	-- Même panneau au dos : lisible depuis l'intérieur de la base et l'esplanade
-	local back = surface:Clone()
-	back.Name = "SignGuiBack"
-	back.Face = Enum.NormalId.Back
-	back.Parent = sign
-	return sign
 end
 
 local function buildPlot(plots: Folder, index: number)
 	local plotCFrame = MapBuilder.GetPlotCFrame(index)
 	local color = PLOT_COLORS[(index - 1) % #PLOT_COLORS + 1]
-	local light = color:Lerp(C.White, 0.62)
 	local W, D, H = MapBuilder.PLOT_WIDTH, MapBuilder.PLOT_DEPTH, MapBuilder.WALL_HEIGHT
 	local FT = FLOOR_TOP
 	local front = -D / 2 -- façade côté tapis (Z local)
@@ -1537,159 +1777,114 @@ local function buildPlot(plots: Folder, index: number)
 		return plotCFrame * CFrame.new(x, y, z)
 	end
 
-	-- Sol blanc cassé, quadrillage léger couleur d'équipe, allée centrale colorée
+	-- Sol en planches claires
 	local floor =
-		block(model, "Floor", Vector3.new(W, 1.2, D), at(0, FT - 0.6, 0), C.Floor, Enum.Material.SmoothPlastic)
+		block(model, "Floor", Vector3.new(W, 1.2, D), at(0, FT - 0.6, 0), C.BaseFloor, Enum.Material.WoodPlanks)
 	model.PrimaryPart = floor
-	local aisle = 11
-	block(
-		model,
-		"Aisle",
-		Vector3.new(aisle, 0.1, D - 4),
-		at(0, FT + 0.05, 0),
-		color,
-		Enum.Material.SmoothPlastic,
-		noCollide()
-	)
-	for _, side in { -1, 1 } do
-		block(
-			model,
-			"AisleEdge",
-			Vector3.new(0.6, 0.12, D - 4),
-			at(side * (aisle / 2), FT + 0.06, 0),
-			C.White,
-			Enum.Material.SmoothPlastic,
-			noCollide()
-		)
-		for _, x in { 16.5, 27.5 } do
-			block(
-				model,
-				"FloorGrid",
-				Vector3.new(0.35, 0.05, D - 4),
-				at(side * x, FT + 0.025, 0),
-				light,
-				Enum.Material.SmoothPlastic,
-				noCollide()
-			)
-		end
-		for _, z in { -26.5, -17.5, -8.5, 0.5, 9.5, 18.5, 27.5, 36.5 } do
-			local x0, x1 = aisle / 2, W / 2 - 2
-			block(
-				model,
-				"FloorGrid",
-				Vector3.new(x1 - x0, 0.05, 0.35),
-				at(side * (x0 + x1) / 2, FT + 0.025, z),
-				light,
-				Enum.Material.SmoothPlastic,
-				noCollide()
-			)
-		end
-	end
 
-	-- Murs pleins couleur d'équipe, plinthe anthracite, bandeau blanc en haut
-	local thickness = 2
+	-- Murs bas en brique blanc cassé, chaperon couleur d'équipe
+	local thickness = 1.8
+	local capHeight = 1
 	local function wall(length: number, cf: CFrame)
 		block(
 			model,
 			"Wall",
 			Vector3.new(length, H, thickness),
 			cf * CFrame.new(0, FT + H / 2, 0),
-			color,
-			Enum.Material.SmoothPlastic
-		)
-		block(
-			model,
-			"WallBase",
-			Vector3.new(length, 1, thickness + 0.3),
-			cf * CFrame.new(0, FT + 0.5, 0),
-			C.Trim,
-			Enum.Material.SmoothPlastic
+			C.BaseWall,
+			Enum.Material.Brick
 		)
 		block(
 			model,
 			"WallCap",
-			Vector3.new(length + 0.3, 1.2, thickness + 0.7),
-			cf * CFrame.new(0, FT + H + 0.6, 0),
-			C.White,
+			Vector3.new(length + 0.4, capHeight, thickness + 0.5),
+			cf * CFrame.new(0, FT + H + capHeight / 2, 0),
+			color,
 			Enum.Material.SmoothPlastic
 		)
 	end
 	local sideCF = CFrame.Angles(0, math.rad(90), 0)
+	local pillarWidth = 3.6 -- piliers de l'arche
 	wall(W, at(0, 0, D / 2 - thickness / 2))
 	wall(D, at(-W / 2 + thickness / 2, 0, 0) * sideCF)
 	wall(D, at(W / 2 - thickness / 2, 0, 0) * sideCF)
-	local frontLength = W / 2 - OPENING / 2
+	local frontStart = OPENING / 2 + pillarWidth
+	local frontLength = W / 2 - frontStart
 	for _, side in { -1, 1 } do
-		wall(frontLength, at(side * (OPENING / 2 + frontLength / 2), 0, front + thickness / 2))
+		wall(frontLength, at(side * (frontStart + frontLength / 2), 0, front + thickness / 2))
 	end
-	-- Montants blancs aux coins et au milieu des longs murs
-	local postHeight = H + 2.6
+	-- Piliers d'angle (et au milieu des longs murs) un peu plus hauts que les murs
+	local postSize = 3.2
+	local postHeight = H + 1.8
 	local postSpots = {
-		{ -W / 2 + 1, front + 1 },
-		{ W / 2 - 1, front + 1 },
-		{ -W / 2 + 1, D / 2 - 1 },
-		{ W / 2 - 1, D / 2 - 1 },
-		{ -W / 2 + 1, 0 },
-		{ W / 2 - 1, 0 },
-		{ 0, D / 2 - 1 },
+		{ -W / 2 + postSize / 2 - 0.2, front + postSize / 2 - 0.2 },
+		{ W / 2 - postSize / 2 + 0.2, front + postSize / 2 - 0.2 },
+		{ -W / 2 + postSize / 2 - 0.2, D / 2 - postSize / 2 + 0.2 },
+		{ W / 2 - postSize / 2 + 0.2, D / 2 - postSize / 2 + 0.2 },
+		{ -W / 2 + postSize / 2 - 0.2, 0 },
+		{ W / 2 - postSize / 2 + 0.2, 0 },
 	}
 	for _, spot in postSpots do
 		block(
 			model,
 			"Post",
-			Vector3.new(3.4, postHeight, 3.4),
+			Vector3.new(postSize, postHeight, postSize),
 			at(spot[1], FT + postHeight / 2, spot[2]),
-			C.White,
-			Enum.Material.SmoothPlastic
+			C.BaseWall,
+			Enum.Material.Brick
 		)
 		block(
 			model,
 			"PostCap",
-			Vector3.new(4, 1, 4),
-			at(spot[1], FT + postHeight + 0.5, spot[2]),
+			Vector3.new(postSize + 0.6, capHeight, postSize + 0.6),
+			at(spot[1], FT + postHeight + capHeight / 2, spot[2]),
 			color,
 			Enum.Material.SmoothPlastic
 		)
 	end
 
-	-- Arche d'entrée : piliers blancs, poutre anthracite, grand panneau
-	local pillarX = OPENING / 2 + 1.8
+	-- Arche d'entrée : piliers en brique, linteau couleur d'équipe, panneau dessus
+	local pillarX = OPENING / 2 + pillarWidth / 2
 	for _, side in { -1, 1 } do
 		block(
 			model,
 			"ArchPillar",
-			Vector3.new(3.6, ARCH_CLEAR, 3.8),
+			Vector3.new(pillarWidth, ARCH_CLEAR, 3.8),
 			at(side * pillarX, FT + ARCH_CLEAR / 2, front + 1),
-			C.White,
-			Enum.Material.SmoothPlastic
+			C.BaseWall,
+			Enum.Material.Brick
 		)
-		-- Émetteur laser (face intérieure du pilier) avec ses lentilles
+		-- Émetteur laser (face intérieure du pilier) : bande de métal gris clair
 		block(
 			model,
 			"LaserEmitter",
-			Vector3.new(0.8, ARCH_CLEAR - 1, 1.6),
-			at(side * (OPENING / 2 - 0.1), FT + ARCH_CLEAR / 2, front + 1),
-			C.Metal,
-			Enum.Material.SmoothPlastic
+			Vector3.new(0.5, ARCH_CLEAR - 1, 1.4),
+			at(side * (OPENING / 2 - 0.2), FT + ARCH_CLEAR / 2, front + 1),
+			C.Steel,
+			Enum.Material.Metal
 		)
 	end
+	local beamHeight = 1.8
 	block(
 		model,
 		"ArchBeam",
-		Vector3.new(SIGN_SIZE.X, 2.6, 4.2),
-		at(0, FT + ARCH_CLEAR + 1.3, front + 1),
-		C.Trim,
+		Vector3.new(OPENING + pillarWidth * 2 + 0.8, beamHeight, 4.4),
+		at(0, FT + ARCH_CLEAR + beamHeight / 2, front + 1),
+		color,
 		Enum.Material.SmoothPlastic
 	)
-	block(
+	local sign = block(
 		model,
-		"ArchTrim",
-		Vector3.new(SIGN_SIZE.X + 0.4, 0.6, 4.6),
-		at(0, FT + ARCH_CLEAR + 0.3, front + 1),
+		"Sign",
+		Vector3.new(SIGN_SIZE.X, SIGN_SIZE.Y, 0.8),
+		at(0, FT + ARCH_CLEAR + beamHeight + 0.15 + SIGN_SIZE.Y / 2, front + 1),
 		C.White,
-		Enum.Material.SmoothPlastic
+		Enum.Material.SmoothPlastic,
+		noCollide()
 	)
-	buildSign(model, at(0, FT + ARCH_CLEAR + 2.6 + SIGN_SIZE.Y / 2, front - 0.4), color)
+	buildSignGui(sign, color, Enum.NormalId.Front, "SignGui")
+	-- Même panneau au dos : lisible depuis l'intérieur de la base et l'esplanade
+	buildSignGui(sign, color, Enum.NormalId.Back, "SignGuiBack")
 
 	-- Barrière : mur LOGIQUE de l'entrée, toujours invisible. Ce sont les lasers qui
 	-- la montrent (BaseDefenseService). Traversable tant qu'elle est inactive.
@@ -1706,19 +1901,20 @@ local function buildPlot(plots: Folder, index: number)
 			CanQuery = false,
 		}
 	)
+	-- Lasers cachés (BaseDefenseService les montre, en néon, base verrouillée)
 	local lasers = Instance.new("Folder")
 	lasers.Name = "Lasers"
 	lasers.Parent = model
-	for i = 1, 6 do
-		local y = FT + 1.2 + (i - 1) * 1.95
+	for i = 1, 5 do
+		local y = FT + 1.6 + (i - 1) * 2.35
 		rod(
 			lasers,
 			"Laser",
 			OPENING,
-			0.45,
+			0.4,
 			at(0, y, front + 1),
 			C.Laser,
-			Enum.Material.Neon,
+			Enum.Material.SmoothPlastic,
 			noCollide({ Transparency = 1, CastShadow = false })
 		)
 		for _, side in { -1, 1 } do
@@ -1727,8 +1923,8 @@ local function buildPlot(plots: Folder, index: number)
 			block(
 				model,
 				"LaserLens",
-				Vector3.new(0.3, 0.6, 0.6),
-				at(side * (OPENING / 2 - 0.55), y, front + 1),
+				Vector3.new(0.3, 0.55, 0.55),
+				at(side * (OPENING / 2 - 0.5), y, front + 1),
 				C.LensOff,
 				Enum.Material.SmoothPlastic,
 				noCollide()
@@ -1736,45 +1932,23 @@ local function buildPlot(plots: Folder, index: number)
 		end
 	end
 
-	-- Paillasson couleur d'équipe entre le trottoir et l'entrée
+	-- Seuil en béton entre le trottoir et l'entrée (même dalle que le trottoir)
 	local outside = MapBuilder.PLOT_X - D / 2 - MapBuilder.SIDEWALK_OUTER -- herbe entre trottoir et façade
 	block(
 		model,
 		"Doorstep",
-		Vector3.new(OPENING + 4, FT, outside + 0.4),
-		at(0, FT / 2, front - outside / 2),
+		Vector3.new(OPENING + 4, FT, outside + 0.9),
+		at(0, FT / 2, front - (outside + 0.9) / 2),
 		C.Sidewalk,
-		Enum.Material.SmoothPlastic
-	)
-	block(
-		model,
-		"Doormat",
-		Vector3.new(OPENING - 2, 0.1, outside + 2),
-		at(0, FT + 0.05, front - outside / 2 + 1),
-		color,
-		Enum.Material.SmoothPlastic,
-		noCollide()
+		Enum.Material.Concrete
 	)
 
-	-- Point d'apparition du propriétaire (face au tapis) + cercle lumineux
+	-- Point d'apparition du propriétaire (face au tapis) : repère invisible
 	marker(model, "Spawn", Vector3.new(7, 0.2, 7), at(0, FT + 0.1, -30))
-	cylinder(
-		model,
-		"SpawnDisc",
-		0.2,
-		7,
-		at(0, FT + 0.12, -30),
-		color,
-		Enum.Material.Neon,
-		noCollide({
-			Transparency = 0.15,
-		})
-	)
-	cylinder(model, "SpawnInner", 0.22, 5.2, at(0, FT + 0.13, -30), C.White, Enum.Material.SmoothPlastic, noCollide())
 
 	-- Arrivée du portail de raccourci : sur le trottoir DEVANT la base (hors barrière),
 	-- tournée vers l'entrée. Repère invisible : ShortcutService joue déjà l'effet de
-	-- téléportation à l'arrivée (un disque ici ressemblait à une flaque d'eau)
+	-- téléportation à l'arrivée
 	marker(
 		model,
 		"ShortcutLanding",
@@ -1789,40 +1963,38 @@ local function buildPlot(plots: Folder, index: number)
 		CanQuery = false,
 	})
 
-	-- Bouton de verrouillage : gros bouton rouge rond au sol, juste après l'entrée (visible
-	-- depuis le trottoir à travers l'ouverture)
+	-- Bouton de verrouillage : gros bouton rouge (danger) sur un socle clair, juste
+	-- après l'entrée (visible depuis le trottoir à travers l'ouverture)
 	local lockAt = at(-11, 0, front + 10)
-	cylinder(model, "LockOutline", 0.4, 8.6, lockAt * CFrame.new(0, FT + 0.2, 0), C.Ink, Enum.Material.SmoothPlastic)
-	cylinder(model, "LockRing", 0.7, 8, lockAt * CFrame.new(0, FT + 0.35, 0), C.White, Enum.Material.SmoothPlastic)
-	local lockButton =
-		cylinder(model, "LockButton", 0.9, 6, lockAt * CFrame.new(0, FT + 1.1, 0), C.LockRed, Enum.Material.Neon)
-	cylinder(
+	cylinder(model, "LockPlate", 0.4, 7.6, lockAt * CFrame.new(0, FT + 0.2, 0), C.Curb, Enum.Material.Concrete)
+	cylinder(model, "LockRing", 0.5, 6.2, lockAt * CFrame.new(0, FT + 0.25, 0), C.Ink, Enum.Material.SmoothPlastic)
+	local lockButton = cylinder(
 		model,
-		"LockShine",
-		0.12,
-		2.2,
-		lockAt * CFrame.new(-1, FT + 1.6, -1),
-		Color3.fromRGB(255, 170, 170),
-		Enum.Material.Neon,
-		noCollide()
+		"LockButton",
+		0.9,
+		5.4,
+		lockAt * CFrame.new(0, FT + 0.85, 0),
+		C.Danger,
+		Enum.Material.SmoothPlastic
 	)
 	addPrompt(lockButton, "LockPrompt", "Verrouiller", "Base", 0.4, Enum.KeyCode.E)
-	addLabel(lockButton, "🔒 VERROUILLER", 4.2)
+	addLabel(lockButton, "🔒 Verrouiller", 4)
 
-	-- Portail de fusion (violet = magique) : marches + anneau + vortex
+	-- Portail de fusion (violet = magique) : anneau de marbre clair, disque violet et
+	-- voile scintillant (ForceField), aucun néon
 	local fx, fz = 19, front + 9
-	cylinder(model, "FusionStep", 0.8, 10, at(fx, FT + 0.4, fz), C.White, Enum.Material.SmoothPlastic)
-	cylinder(model, "FusionStep", 0.8, 7.6, at(fx, FT + 1.2, fz), C.Magic, Enum.Material.SmoothPlastic)
-	local portalCenter = at(fx, FT + 6.4, fz)
-	for i = 1, 20 do
-		local a = (i / 20) * math.pi * 2
+	cylinder(model, "FusionStep", 0.5, 9.6, at(fx, FT + 0.25, fz), C.Curb, Enum.Material.Concrete)
+	cylinder(model, "FusionStep", 0.5, 7.6, at(fx, FT + 0.75, fz), C.Marble, Enum.Material.Marble)
+	local portalCenter = at(fx, FT + 6.2, fz)
+	for i = 1, 14 do
+		local a = (i / 14) * math.pi * 2
 		block(
 			model,
 			"FusionRing",
-			Vector3.new(1.7, 1.2, 1.5),
-			portalCenter * CFrame.Angles(0, 0, a) * CFrame.new(0, 4.2, 0),
-			C.Magic,
-			Enum.Material.Neon,
+			Vector3.new(2.1, 1.3, 1.5),
+			portalCenter * CFrame.Angles(0, 0, a) * CFrame.new(0, 4.3, 0),
+			C.Marble,
+			Enum.Material.Marble,
 			noCollide()
 		)
 	end
@@ -1830,30 +2002,30 @@ local function buildPlot(plots: Folder, index: number)
 		model,
 		"FusionPortal",
 		0.5,
-		7.6,
+		7.4,
 		portalCenter,
-		Color3.fromRGB(110, 30, 230),
-		Enum.Material.Neon,
-		{ CanCollide = false, Transparency = 0.1 }
+		C.MagicDeep,
+		Enum.Material.SmoothPlastic,
+		{ CanCollide = false }
 	)
 	disc(
 		model,
 		"FusionSwirl",
 		0.7,
-		5.6,
+		5.8,
 		portalCenter,
-		Color3.fromRGB(255, 200, 255),
+		Color3.fromRGB(214, 196, 255),
 		Enum.Material.ForceField,
 		noCollide()
 	)
 	addPrompt(fusion, "FusionPrompt", "Fusionner", "Portail de fusion", 0, Enum.KeyCode.E)
-	addLabel(fusion, "🌀 FUSION", 6.5)
-	sparkle(fusion, C.Magic, 10, 0.4, 2)
-	pointLight(fusion, C.Magic, 16, 2)
+	addLabel(fusion, "🌀 Fusion", 6.5)
+	sparkle(fusion, C.Magic, 6, 0.35, 2)
+	pointLight(fusion, C.Magic, 14, 1.2)
 
-	-- Emplacements : socles ronds. Construits avec l'aspect « verrouillé » (socle gris
-	-- perle, anneau gris foncé mat) comme au démarrage du serveur ; PlotService passe
-	-- les emplacements débloqués en blanc avec un anneau néon couleur d'équipe
+	-- Emplacements : socles ronds blancs, anneau fin couleur d'équipe. Construits
+	-- « verrouillés » (INVISIBLES et traversables) comme au démarrage du serveur :
+	-- PlotService montre ceux que le propriétaire a débloqués
 	local slots = Instance.new("Folder")
 	slots.Name = "Slots"
 	slots.Parent = model
@@ -1864,23 +2036,23 @@ local function buildPlot(plots: Folder, index: number)
 			local slot = cylinder(
 				slots,
 				"Slot" .. slotIndex,
-				1,
+				0.8,
 				6.4,
-				at(x, FT + 0.5, z),
-				C.SlotLocked,
-				Enum.Material.SmoothPlastic,
-				{ CanCollide = true }
+				at(x, FT + 0.4, z),
+				C.Pad,
+				Enum.Material.Plastic,
+				{ Transparency = 1, CanCollide = false, CanQuery = false }
 			)
 			slot:SetAttribute("SlotIndex", slotIndex)
 			cylinder(
 				slot,
 				"SlotRing",
-				0.5,
-				7.4,
-				at(x, FT + 0.25, z),
-				C.SlotRingLocked,
+				0.36,
+				7,
+				at(x, FT + 0.18, z),
+				color,
 				Enum.Material.SmoothPlastic,
-				noCollide()
+				noCollide({ Transparency = 1 })
 			)
 		end
 	end
@@ -1906,6 +2078,8 @@ function MapBuilder.Build(parent: Instance): Folder
 	buildRift(map)
 	buildExit(map)
 	buildRoad(map)
+	buildStands(map)
+	buildPlanters(map)
 	buildDecor(map)
 	buildCloudSea(map)
 	buildBoards(map)
@@ -1935,9 +2109,9 @@ function MapBuilder.Build(parent: Instance): Folder
 		folder.Parent = map
 	end
 
-	-- Apparition neutre avant l'attribution de la base : sur l'esplanade de la Rift,
-	-- face au tapis (dalle invisible + disque lumineux)
-	local spawnAt = Vector3.new(-30, 0.3, MapBuilder.RIFT_Z + 40)
+	-- Apparition neutre avant l'attribution de la base : devant la Rift, entre son
+	-- pilier ouest et la Boutique, face au tapis (dalle invisible)
+	local spawnAt = Vector3.new(-20, 0.5, MapBuilder.RIFT_Z + 17)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "CentralSpawn"
 	spawn.Anchored = true
@@ -1948,18 +2122,6 @@ function MapBuilder.Build(parent: Instance): Folder
 	spawn.Transparency = 1
 	spawn.Duration = 0 -- pas de ForceField à l'apparition
 	spawn.Parent = map
-	-- Même dessin que l'apparition des bases : anneau néon bleu (navigation) + disque blanc
-	cylinder(map, "CentralSpawnPad", 0.3, 10, CFrame.new(spawnAt), C.Navigation, Enum.Material.Neon, noCollide())
-	cylinder(
-		map,
-		"CentralSpawnInner",
-		0.32,
-		8.4,
-		CFrame.new(spawnAt + Vector3.new(0, 0.02, 0)),
-		C.White,
-		Enum.Material.SmoothPlastic,
-		noCollide()
-	)
 
 	map.Parent = parent
 	return map

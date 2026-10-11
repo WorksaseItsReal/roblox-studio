@@ -61,6 +61,8 @@ end
 -- La pièce Barrier est le mur LOGIQUE (collision). Le visuel, ce sont les lasers
 -- rouges du dossier Plot.Lasers (attribut optionnel ActiveTransparency par pièce) ;
 -- une map manuelle sans lasers affiche la barrière elle-même.
+-- Les lasers ne passent en néon que pendant le verrouillage (docs/ART_DIRECTION.md :
+-- néon rare) ; cachés, ils restent en SmoothPlastic.
 local function setBarrierVisual(plot, active: boolean)
 	plot.Barrier.CanCollide = active
 	setLenses(plot, active)
@@ -74,9 +76,12 @@ local function setBarrierVisual(plot, active: boolean)
 		if laser:IsA("BasePart") then
 			local shown = laser:GetAttribute("ActiveTransparency")
 			laser.Transparency = if active then (if type(shown) == "number" then shown else 0) else 1
+			laser.Material = if active then Enum.Material.Neon else Enum.Material.SmoothPlastic
 		end
 	end
 end
+-- Exposé pour les aperçus de la map hors Roblox (base verrouillée simulée)
+BaseDefenseService.SetBarrierVisual = setBarrierVisual
 
 local function deactivate(plot)
 	activeTokens[plot] = nil

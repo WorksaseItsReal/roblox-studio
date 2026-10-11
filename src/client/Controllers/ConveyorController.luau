@@ -61,6 +61,8 @@ end
 
 -- Colonne de lumière visible de toute la map pour les Légendaires et plus :
 -- tout le monde voit qu'une créature rare est sortie et court l'acheter.
+-- Fine et très transparente (docs/ART_DIRECTION.md : néon rare, rien de criard) :
+-- elle se repère de loin sans écraser le tapis ni la Rift.
 local function addLightPillar(model: Model): BasePart?
 	local root = model.PrimaryPart
 	local def = Creatures.Get(tostring(model:GetAttribute("CreatureId") or ""))
@@ -68,7 +70,7 @@ local function addLightPillar(model: Model): BasePart?
 	if not root or not rarity or rarity.Tier < 4 then
 		return nil
 	end
-	local height = 90
+	local height = 80
 	local pillar = Instance.new("Part")
 	pillar.Name = "LightPillar"
 	pillar.Shape = Enum.PartType.Cylinder
@@ -79,8 +81,8 @@ local function addLightPillar(model: Model): BasePart?
 	pillar.CastShadow = false
 	pillar.Material = Enum.Material.Neon
 	pillar.Color = rarity.Color
-	pillar.Transparency = if rarity.Tier >= 6 then 0.35 else 0.55
-	pillar.Size = Vector3.new(height, 2.4, 2.4)
+	pillar.Transparency = if rarity.Tier >= 6 then 0.5 else 0.68
+	pillar.Size = Vector3.new(height, 1.8, 1.8)
 	-- Cylindre debout, posé sur la créature (suit le modèle à chaque PivotTo)
 	pillar.CFrame = CFrame.new(root.Position + Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, 0, math.rad(90))
 	pillar.Parent = model
