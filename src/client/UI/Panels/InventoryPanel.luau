@@ -16,37 +16,31 @@ local Widgets = require(script.Parent.Parent.Widgets)
 local InventoryPanel = {}
 InventoryPanel.Title = "Mes créatures"
 InventoryPanel.Icon = "🐾"
-InventoryPanel.Color = "Blue"
 
 function InventoryPanel.Create(content: Frame, ctx)
-	local top = Widgets.Row({ Size = UDim2.new(1, -190, 0, 52), Parent = content }, 10)
-	local slotsPill = UIKit.Pill(
-		"📦 0 / 8",
-		Theme.Info,
-		{ Parent = top, LayoutOrder = 1, Size = UDim2.fromOffset(0, 38), TextSize = 19 }
-	)
-	local incomePill = UIKit.Pill(
-		"💸 $0/s",
-		Color3.fromRGB(255, 190, 0),
-		{ Parent = top, LayoutOrder = 2, Size = UDim2.fromOffset(0, 38), TextSize = 19 }
-	)
+	-- Barre du haut : emplacements, revenus, accès à la fusion
+	local top = Widgets.Row({ Size = UDim2.new(1, -170, 0, 40), Parent = content }, 8)
+	local slotsChip = UIKit.Chip("📦 0 / 8", { LayoutOrder = 1, Parent = top })
+	local incomePill = UIKit.Pill("💰 $0/s", Theme.Gold, {
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0, 36),
+		TextSize = 17,
+		Parent = top,
+	})
 	UIKit.Button({
-		Text = "🌀 FUSION",
-		Color = "Purple",
-		TextSize = 21,
+		Text = "🌀 Fusion",
+		Color = "Blue",
+		TextSize = 19,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 0, 0, 0),
-		Size = UDim2.fromOffset(176, 52),
+		Position = UDim2.new(1, -4, 0, -2),
+		Size = UDim2.fromOffset(150, 44),
 		Parent = content,
 		OnClick = function()
 			ctx.UI.Open("Fusion")
 		end,
 	})
 
-	local grid = UIKit.ScrollGrid(content, UDim2.new(0.5, -8, 0, 124), {
-		Position = UDim2.fromOffset(0, 64),
-		Size = UDim2.new(1, 0, 1, -64),
-	})
+	local grid = UIKit.ScrollGrid(content, UDim2.new(0.5, -6, 0, 124), UIKit.ScrollArea(52))
 
 	local focusUid: string? = nil
 	local confirmUid: string? = nil
@@ -61,8 +55,8 @@ function InventoryPanel.Create(content: Frame, ctx)
 		if not profile then
 			return
 		end
-		Widgets.SetPillText(slotsPill, string.format("📦 %d / %d", #profile.Creatures, profile.MaxSlots))
-		Widgets.SetPillText(incomePill, "💸 " .. Format.Income(profile.IncomePerSecond))
+		Widgets.SetPillText(slotsChip, string.format("📦 %d / %d", #profile.Creatures, profile.MaxSlots))
+		Widgets.SetPillText(incomePill, "💰 " .. Format.Income(profile.IncomePerSecond))
 		UIKit.ClearChildren(grid)
 
 		local stolen = {}
@@ -86,9 +80,9 @@ function InventoryPanel.Create(content: Frame, ctx)
 				local empty = Widgets.Empty(
 					content,
 					"🐾",
-					"Aucune créature pour l'instant.\nAchète-en sur le tapis de la Rift (touche E) !"
+					"Aucune créature pour l'instant.\nAchète-en sur le tapis de la Rift !"
 				)
-				empty.Position = UDim2.fromOffset(0, 90)
+				empty.Position = UDim2.fromOffset(0, 80)
 			end
 			return
 		end
@@ -105,73 +99,63 @@ function InventoryPanel.Create(content: Frame, ctx)
 			end
 			local mutation = Mutations.Get(entry.Mutation)
 
-			local card = UIKit.Card({ LayoutOrder = order, Parent = grid })
-			if entry.Uid == focusUid then
-				local focusStroke = card:FindFirstChildOfClass("UIStroke")
-				if focusStroke then
-					focusStroke.Color = Theme.Gold
-					focusStroke.Thickness = 4.5
-				end
-			end
-			local tile = Widgets.RarityTile(Theme.DimensionIcons[def.Dimension] or "🐾", def.Rarity, 84, {
+			-- Créature choisie dans le monde : carte sélectionnée (violet de marque)
+			local card =
+				UIKit.Card({ LayoutOrder = order, Parent = grid }, if entry.Uid == focusUid then Theme.Brand else nil)
+			local tile = Widgets.RarityTile(Theme.DimensionIcons[def.Dimension] or "🐾", def.Rarity, 72, {
 				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 12, 0.5, 0),
+				Position = UDim2.new(0, 14, 0.5, 0),
 				Parent = card,
 			})
 			if stolen[entry.Uid] then
 				-- Ruban rouge sur l'icône : cette créature est en train d'être volée
-				UIKit.Pill("EN VOL", Theme.Danger, {
-					AnchorPoint = Vector2.new(0.5, 1),
-					Position = UDim2.new(0.5, 0, 1, 8),
-					Size = UDim2.fromOffset(0, 24),
-					TextSize = 15,
+				UIKit.Pill("En vol", Theme.Danger, {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.new(0.5, 0, 1, 0),
+					Size = UDim2.fromOffset(0, 22),
+					TextSize = 13,
+					ZIndex = 3,
 					Parent = tile,
 				})
 			end
-			UIKit.Body({
+			UIKit.Label({
 				Text = def.Name,
-				TextSize = 21,
-				TextColor3 = Theme.Text,
+				TextSize = 19,
 				TextWrapped = false,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				Position = UDim2.fromOffset(110, 8),
-				Size = UDim2.new(1, -120, 0, 26),
-				Stroke = 2,
+				Position = UDim2.fromOffset(100, 12),
+				Size = UDim2.new(1, -112, 0, 24),
 				Parent = card,
 			})
-			-- Rareté (encart sombre : la couleur ressort) + mutation
+			-- Rareté + mutation
 			local tags = Widgets.Row(
-				{ Position = UDim2.fromOffset(110, 37), Size = UDim2.new(1, -120, 0, 24), Parent = card },
+				{ Position = UDim2.fromOffset(100, 40), Size = UDim2.new(1, -112, 0, 24), Parent = card },
 				6
 			)
-			Widgets.RarityTag(def.Rarity, { TextSize = 16, LayoutOrder = 1, Parent = tags })
+			Widgets.RarityTag(def.Rarity, { LayoutOrder = 1, Parent = tags })
 			if mutation then
-				UIKit.Pill(
-					string.format("%s x%d", mutation.Name, mutation.Multiplier),
-					mutation.Color,
-					{ Parent = tags, LayoutOrder = 2, Size = UDim2.fromOffset(0, 24), TextSize = 16 }
-				)
+				Widgets.MutationTag(mutation, { LayoutOrder = 2, Parent = tags })
 			end
-			UIKit.Text({
+			UIKit.Label({
 				Text = Format.Income(Economy.GetCreatureIncome(entry)),
-				TextSize = 25,
-				TextColor3 = Theme.Income,
+				TextSize = 19,
+				TextColor3 = Theme.GoldText,
 				TextWrapped = false,
-				Position = UDim2.fromOffset(110, 74),
-				Size = UDim2.new(1, -268, 0, 34),
-				Stroke = 2.8,
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0, 100, 1, -15),
+				Size = UDim2.new(1, -250, 0, 26),
 				Fit = true,
 				Parent = card,
 			})
 
 			local confirming = confirmUid == entry.Uid
 			UIKit.Button({
-				Text = if confirming then "SÛR ?" else "Vendre " .. Format.Money(Economy.GetSellValue(entry)),
-				Color = if confirming then "Red" else "Orange",
-				TextSize = 18,
+				Text = if confirming then "Sûr ?" else "Vendre " .. Format.Money(Economy.GetSellValue(entry)),
+				Color = if confirming then "Red" else "Green",
+				TextSize = 15,
 				AnchorPoint = Vector2.new(1, 1),
-				Position = UDim2.new(1, -10, 1, -10),
-				Size = UDim2.fromOffset(142, 48),
+				Position = UDim2.new(1, -12, 1, -12),
+				Size = UDim2.fromOffset(126, 40),
 				ZIndex = 2,
 				Parent = card,
 				OnClick = function()

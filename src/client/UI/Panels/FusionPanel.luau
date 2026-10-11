@@ -17,74 +17,76 @@ local Widgets = require(script.Parent.Parent.Widgets)
 local FusionPanel = {}
 FusionPanel.Title = "Portail de fusion"
 FusionPanel.Icon = "🌀"
-FusionPanel.Color = "Purple"
 
 -- Signe "+" ou "=" de la formule
 local function formulaSign(parent: Instance, text: string, x: number)
-	UIKit.Text({
+	UIKit.Label({
 		Text = text,
-		TextSize = 34,
-		TextColor3 = Theme.Gold,
+		TextSize = 28,
+		TextColor3 = Theme.TextMuted,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(x, 8),
-		Size = UDim2.fromOffset(30, 52),
-		Stroke = 3.5,
+		Position = UDim2.fromOffset(x, 14),
+		Size = UDim2.fromOffset(24, 48),
 		Parent = parent,
 	})
 end
 
 function FusionPanel.Create(content: Frame, ctx)
 	-- En-tête : la formule en images, la règle, et les chances de mutation (transparence)
-	local info = UIKit.Inset({ Size = UDim2.new(1, 0, 0, 112), Parent = content })
-	UIKit.IconTile("🐾", Theme.Info, 52, { Position = UDim2.fromOffset(14, 8), Parent = info })
+	local info = UIKit.Card({ Size = UDim2.new(1, 0, 0, 104), Parent = content })
+	UIKit.IconTile("🐾", Theme.Info, 48, { Position = UDim2.fromOffset(16, 14), Parent = info })
 	formulaSign(info, "+", 66)
-	UIKit.IconTile("🐾", Theme.Info, 52, { Position = UDim2.fromOffset(96, 8), Parent = info })
-	formulaSign(info, "=", 148)
-	local result = UIKit.IconTile("🌀", Theme.Magic, 52, { Position = UDim2.fromOffset(178, 8), Parent = info })
+	UIKit.IconTile("🐾", Theme.Info, 48, { Position = UDim2.fromOffset(92, 14), Parent = info })
+	formulaSign(info, "=", 142)
+	local result = UIKit.IconTile("✨", Theme.Brand, 48, { Position = UDim2.fromOffset(168, 14), Parent = info })
 	local resultGradient = result:FindFirstChildOfClass("UIGradient")
 	if resultGradient then
 		resultGradient.Color = Widgets.Rainbow
 		resultGradient.Rotation = 45
 	end
-	UIKit.Text({
-		Text = "2 identiques = 1 créature MUTÉE !",
-		TextSize = 24,
+	UIKit.Label({
+		Text = "2 identiques = 1 créature mutée !",
+		TextSize = 20,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(248, 8),
-		Size = UDim2.new(1, -262, 0, 30),
-		Stroke = 2.8,
+		Position = UDim2.fromOffset(236, 14),
+		Size = UDim2.new(1, -252, 0, 24),
 		Fit = true,
 		Parent = info,
 	})
 	UIKit.Body({
-		Text = "Revenus x2 à x5. Non mutées, près du portail de fusion de ta base.",
-		TextSize = 16,
-		TextColor3 = Theme.Text,
+		Text = "Revenus x2 à x5. Au portail de fusion de ta base.",
+		TextSize = 15,
 		TextWrapped = false,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		Position = UDim2.fromOffset(250, 38),
-		Size = UDim2.new(1, -264, 0, 22),
+		Position = UDim2.fromOffset(236, 40),
+		Size = UDim2.new(1, -252, 0, 20),
 		Parent = info,
 	})
-	local odds = Widgets.Row({ Position = UDim2.fromOffset(14, 72), Size = UDim2.new(1, -28, 0, 28), Parent = info }, 8)
+	local odds = Widgets.Row({ Position = UDim2.fromOffset(16, 70), Size = UDim2.new(1, -32, 0, 24), Parent = info }, 6)
+	UIKit.Body({
+		Text = "Chances :",
+		TextSize = 15,
+		TextWrapped = false,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, 24),
+		LayoutOrder = 0,
+		Parent = odds,
+	})
 	for order, mutation in Mutations.List do
-		UIKit.Pill(
+		local tag = Widgets.MutationTag(mutation, { LayoutOrder = order, Parent = odds })
+		Widgets.SetPillText(
+			tag,
 			string.format(
-				"%s x%d • %d %%",
+				"%s x%d · %d %%",
 				mutation.Name,
 				mutation.Multiplier,
 				math.round(mutation.Weight / Mutations.TotalWeight * 100)
-			),
-			mutation.Color,
-			{ Parent = odds, LayoutOrder = order, Size = UDim2.fromOffset(0, 28), TextSize = 16 }
+			)
 		)
 	end
 
-	local grid = UIKit.ScrollGrid(content, UDim2.new(0.5, -8, 0, 112), {
-		Position = UDim2.fromOffset(0, 122),
-		Size = UDim2.new(1, 0, 1, -122),
-	})
+	local grid = UIKit.ScrollGrid(content, UDim2.new(0.5, -6, 0, 104), UIKit.ScrollArea(116))
 
 	local self = {} :: any
 
@@ -117,46 +119,43 @@ function FusionPanel.Create(content: Frame, ctx)
 			local ready = #uids >= 2
 			local rarity = Rarities.Get(def.Rarity)
 			local tier = if rarity then rarity.Tier else 0
-			-- Paires prêtes d'abord (les plus rares en tête), puis les exemplaires seuls
+			-- Paires prêtes d'abord (les plus rares en tête), puis les exemplaires seuls (grisés)
 			local card = UIKit.Card({
 				LayoutOrder = (if ready then 0 else 1000) - tier * 100 + count,
 				Parent = grid,
-			}, if ready then nil else Theme.Inset, if ready then nil else 0.6)
-			Widgets.RarityTile(Theme.DimensionIcons[def.Dimension] or "🐾", def.Rarity, 78, {
+			}, if ready then nil else Theme.Disabled, if ready then nil else 0.5)
+			Widgets.RarityTile(Theme.DimensionIcons[def.Dimension] or "🐾", def.Rarity, 72, {
 				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 12, 0.5, 0),
+				Position = UDim2.new(0, 14, 0.5, 0),
 				Parent = card,
 			})
-			UIKit.Body({
+			UIKit.Label({
 				Text = def.Name,
-				TextSize = 20,
-				TextColor3 = Theme.Text,
+				TextSize = 19,
 				TextWrapped = false,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				Position = UDim2.fromOffset(102, 9),
-				Size = UDim2.new(1, -112, 0, 26),
-				Stroke = 2,
+				Position = UDim2.fromOffset(100, 10),
+				Size = UDim2.new(1, -112, 0, 24),
 				Parent = card,
 			})
-			Widgets.RarityTag(def.Rarity, { TextSize = 16, Position = UDim2.fromOffset(102, 38), Parent = card })
-			UIKit.Pill(
-				string.format("📦 %d / 2", math.min(#uids, 2)),
-				if ready then Theme.Info else Color3.fromRGB(255, 150, 0),
-				{
-					AnchorPoint = Vector2.new(0, 1),
-					Position = UDim2.new(0, 102, 1, -12),
-					Size = UDim2.fromOffset(0, 28),
-					TextSize = 16,
-					Parent = card,
-				}
-			)
+			Widgets.RarityTag(def.Rarity, { Position = UDim2.fromOffset(100, 38), Parent = card })
+			UIKit.Label({
+				Text = string.format("📦 %d / 2", math.min(#uids, 2)),
+				TextSize = 17,
+				TextColor3 = if ready then Theme.TextDark else Theme.TextMuted,
+				TextWrapped = false,
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0, 100, 1, -12),
+				Size = UDim2.fromOffset(90, 26),
+				Parent = card,
+			})
 			local button = UIKit.Button({
-				Text = if ready then "FUSIONNER" else "ENCORE 1 !",
-				Color = "Purple",
-				TextSize = 18,
+				Text = if ready then "Fusionner" else "Encore 1 !",
+				Color = "Green",
+				TextSize = 17,
 				AnchorPoint = Vector2.new(1, 1),
-				Position = UDim2.new(1, -10, 1, -10),
-				Size = UDim2.fromOffset(150, 50),
+				Position = UDim2.new(1, -12, 1, -12),
+				Size = UDim2.fromOffset(132, 40),
 				ZIndex = 2,
 				Parent = card,
 				OnClick = function()
@@ -165,7 +164,9 @@ function FusionPanel.Create(content: Frame, ctx)
 					end
 				end,
 			})
-			button:SetEnabled(ready)
+			if not ready then
+				button:SetStatus("Encore 1 !")
+			end
 		end
 
 		grid.Visible = count > 0
@@ -174,9 +175,9 @@ function FusionPanel.Create(content: Frame, ctx)
 			local message = Widgets.Empty(
 				content,
 				"🌀",
-				"Aucune créature à fusionner.\nIl te faut 2 exemplaires NON mutés de la même créature."
+				"Aucune créature à fusionner.\nIl te faut 2 exemplaires non mutés de la même créature."
 			)
-			message.Position = UDim2.fromOffset(0, 130)
+			message.Position = UDim2.fromOffset(0, 124)
 		elseif count > 0 and empty then
 			empty:Destroy()
 		end

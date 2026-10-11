@@ -15,27 +15,19 @@ local Widgets = require(script.Parent.Parent.Widgets)
 local BasePanel = {}
 BasePanel.Title = "Améliorations"
 BasePanel.Icon = "🏰"
-BasePanel.Color = "Orange"
 
 local ICONS = { Slots = "🧩", Barrier = "🛡️", Alarm = "🚨" }
+-- Couleur selon le sens : emplacements = infos, barrière = défense, alarme = avertissement
 local COLORS = {
-	Slots = Color3.fromRGB(40, 140, 255),
-	Barrier = Color3.fromRGB(255, 60, 60),
-	Alarm = Color3.fromRGB(255, 160, 0),
+	Slots = Theme.Info,
+	Barrier = Theme.Danger,
+	Alarm = Theme.Warning,
 }
 
 function BasePanel.Create(content: Frame, ctx)
-	local top = Widgets.Row({ Size = UDim2.new(1, 0, 0, 40), Parent = content }, 10)
-	local slotsPill = UIKit.Pill(
-		"📦 8 emplacements",
-		Theme.Info,
-		{ Parent = top, LayoutOrder = 1, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
-	)
-	local barrierPill = UIKit.Pill(
-		"🛡️ 1:00",
-		Theme.Danger,
-		{ Parent = top, LayoutOrder = 2, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
-	)
+	local top = Widgets.Row({ Size = UDim2.new(1, 0, 0, 40), Parent = content }, 8)
+	local slotsChip = UIKit.Chip("📦 8 emplacements", { LayoutOrder = 1, Parent = top })
+	local barrierChip = UIKit.Chip("🛡️ Barrière 1:00", { LayoutOrder = 2, Parent = top })
 	UIKit.Body({
 		Text = "♻️ Conservées après un rebirth",
 		TextWrapped = false,
@@ -45,77 +37,73 @@ function BasePanel.Create(content: Frame, ctx)
 		Parent = top,
 	})
 
-	local list = UIKit.ScrollList(content, { Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 1, -52) })
+	local list = UIKit.ScrollList(content, UIKit.ScrollArea(52))
 	local rows = {}
 
 	for order, upgrade in Upgrades.List do
-		local color = COLORS[upgrade.Id] or Theme.Palette.Blue[2]
-		local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 120), LayoutOrder = order, Parent = list })
-		UIKit.IconTile(ICONS[upgrade.Id] or "⭐", color, 86, {
+		local color = COLORS[upgrade.Id] or Theme.Info
+		local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 112), LayoutOrder = order, Parent = list })
+		UIKit.IconTile(ICONS[upgrade.Id] or "⭐", color, 72, {
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 14, 0.5, 0),
+			Position = UDim2.new(0, 16, 0.5, 0),
 			Parent = card,
 		})
-		UIKit.Text({
+		UIKit.Label({
 			Text = upgrade.Name,
-			TextSize = 24,
+			TextSize = 20,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(114, 9),
-			Size = UDim2.new(1, -330, 0, 30),
-			Stroke = 2.8,
+			Position = UDim2.fromOffset(104, 12),
+			Size = UDim2.new(1, -324, 0, 26),
 			Fit = true,
 			Parent = card,
 		})
 		UIKit.Body({
 			Text = upgrade.Description,
-			Position = UDim2.fromOffset(114, 40),
-			Size = UDim2.new(1, -330, 0, 38),
+			TextSize = 15,
 			TextYAlignment = Enum.TextYAlignment.Top,
+			Position = UDim2.fromOffset(104, 40),
+			Size = UDim2.new(1, -324, 0, 38),
 			Parent = card,
 		})
-		-- Jauge de niveau (un carré par niveau)
+		-- Jauge de niveau (un segment par niveau)
 		local pips =
-			Widgets.Row({ Position = UDim2.fromOffset(114, 84), Size = UDim2.new(1, -330, 0, 22), Parent = card }, 5)
+			Widgets.Row({ Position = UDim2.fromOffset(104, 82), Size = UDim2.new(1, -324, 0, 14), Parent = card }, 4)
 		local pipFrames = {}
 		for level = 1, upgrade.MaxLevel do
 			local pip = UIKit.New("Frame", {
-				BackgroundColor3 = Theme.Inset,
-				Size = UDim2.fromOffset(20, 20),
+				BackgroundColor3 = Theme.Well,
+				Size = UDim2.fromOffset(if upgrade.MaxLevel > 6 then 22 else 34, 12),
 				LayoutOrder = level,
 				Parent = pips,
 			})
 			UIKit.Corner(pip, 6)
-			UIKit.Stroke(pip, 2.5)
 			pipFrames[level] = pip
 		end
-		local levelText = UIKit.Text({
+		local levelText = UIKit.Body({
 			Text = "",
-			TextSize = 16,
-			TextColor3 = Theme.Gold,
+			TextSize = 15,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextWrapped = false,
 			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -14, 0, 10),
-			Size = UDim2.fromOffset(196, 24),
-			Stroke = 2.2,
+			Position = UDim2.new(1, -16, 0, 12),
+			Size = UDim2.fromOffset(188, 22),
 			Fit = true,
 			Parent = card,
 		})
 		local button = UIKit.Button({
 			Text = "",
 			Color = "Green",
-			TextSize = 23,
+			TextSize = 21,
 			AnchorPoint = Vector2.new(1, 1),
-			Position = UDim2.new(1, -14, 1, -12),
-			Size = UDim2.fromOffset(196, 62),
+			Position = UDim2.new(1, -16, 1, -14),
+			Size = UDim2.fromOffset(188, 52),
 			ZIndex = 2,
 			Parent = card,
 			OnClick = function()
 				ctx.Net.Request("BuyUpgrade", upgrade.Id)
 			end,
 		})
-		rows[upgrade.Id] =
-			{ Upgrade = upgrade, Pips = pipFrames, Button = button, LevelText = levelText, Color = color }
+		rows[upgrade.Id] = { Upgrade = upgrade, Pips = pipFrames, Button = button, LevelText = levelText }
 	end
 
 	local self = {} :: any
@@ -125,9 +113,9 @@ function BasePanel.Create(content: Frame, ctx)
 		if not profile then
 			return
 		end
-		Widgets.SetPillText(slotsPill, string.format("📦 %d emplacements", profile.MaxSlots))
+		Widgets.SetPillText(slotsChip, string.format("📦 %d emplacements", profile.MaxSlots))
 		Widgets.SetPillText(
-			barrierPill,
+			barrierChip,
 			"🛡️ Barrière " .. Format.Time(Economy.GetBarrierDuration(profile, profile.Passes))
 		)
 		local money = ctx.State.GetMoney()
@@ -135,17 +123,17 @@ function BasePanel.Create(content: Frame, ctx)
 		for id, row in rows do
 			local level = profile.Upgrades[id] or 0
 			for index, pip in row.Pips do
-				pip.BackgroundColor3 = if index <= level then Theme.Gold else Theme.Inset
+				pip.BackgroundColor3 = if index <= level then Theme.Brand else Theme.Well
 			end
 			local cost = Upgrades.GetCost(id, level)
-			row.LevelText.Text =
-				string.format("Niv. %d » %s", level, if cost then row.Upgrade.LevelText(level + 1) else "MAX")
+			row.LevelText.Text = if cost
+				then string.format("Niv. %d » %s", level, row.Upgrade.LevelText(level + 1))
+				else string.format("Niv. %d · maximum", level)
 			if cost then
 				row.Button:SetText(Format.Money(cost))
 				row.Button:SetEnabled(money >= cost)
 			else
-				row.Button:SetText("✅ MAX")
-				row.Button:SetEnabled(false)
+				row.Button:SetStatus("✅ Niveau max")
 			end
 		end
 	end

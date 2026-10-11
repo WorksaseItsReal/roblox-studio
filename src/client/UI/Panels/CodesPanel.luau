@@ -8,44 +8,48 @@ local UIKit = require(script.Parent.Parent.UIKit)
 local CodesPanel = {}
 CodesPanel.Title = "Codes"
 CodesPanel.Icon = "🔑"
-CodesPanel.Color = "Cyan"
-CodesPanel.Height = 530
+CodesPanel.Height = 452
 
 function CodesPanel.Create(content: Frame, ctx)
-	UIKit.IconCircle("🔑", Color3.fromRGB(0, 190, 240), 112, {
+	UIKit.IconCircle("🔑", Theme.Gold, 80, {
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 2),
+		Position = UDim2.new(0.5, 0, 0, 4),
 		Parent = content,
 	})
-	UIKit.Text({
+	UIKit.Label({
 		Text = "Entre un code pour recevoir des récompenses !",
-		TextSize = 25,
+		TextSize = 22,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(10, 126),
-		Size = UDim2.new(1, -20, 0, 34),
-		Stroke = 3,
+		Position = UDim2.fromOffset(10, 98),
+		Size = UDim2.new(1, -20, 0, 28),
 		Fit = true,
 		Parent = content,
 	})
 
-	local box = UIKit.Input({
-		PlaceholderText = "TON CODE ICI",
+	-- Champ + bouton côte à côte, centrés
+	local form = UIKit.New("Frame", {
+		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, -97, 0, 178),
-		Size = UDim2.fromOffset(400, 66),
-		TextSize = 28,
+		Position = UDim2.new(0.5, 0, 0, 142),
+		Size = UDim2.fromOffset(536, 56),
 		Parent = content,
 	})
+	local box = UIKit.Input({
+		PlaceholderText = "Ton code ici",
+		Position = UDim2.fromOffset(0, 2),
+		Size = UDim2.fromOffset(372, 52),
+		TextSize = 22,
+		Parent = form,
+	})
 
-	local status = UIKit.Text({
+	local status = UIKit.Label({
 		Text = "",
-		TextSize = 20,
+		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(10, 258),
-		Size = UDim2.new(1, -20, 0, 30),
-		Stroke = 2.4,
+		Position = UDim2.fromOffset(10, 210),
+		Size = UDim2.new(1, -20, 0, 24),
 		Fit = true,
 		Parent = content,
 	})
@@ -57,21 +61,21 @@ function CodesPanel.Create(content: Frame, ctx)
 		end
 		local response = ctx.Net.Request("RedeemCode", code)
 		status.Text = response.Message or ""
-		status.TextColor3 = if response.Ok then Theme.Money else Color3.fromRGB(255, 110, 110)
+		status.TextColor3 = if response.Ok then Theme.MoneyText else Theme.DangerText
 		if response.Ok then
 			box.Text = ""
 		end
 	end
 
 	UIKit.Button({
-		Text = "✅ VALIDER",
+		Text = "Valider",
 		Color = "Green",
-		TextSize = 23,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 207, 0, 175),
-		Size = UDim2.fromOffset(180, 74),
+		TextSize = 20,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		Size = UDim2.fromOffset(148, 56),
 		Radius = 14,
-		Parent = content,
+		Parent = form,
 		OnClick = submit,
 	})
 	box.FocusLost:Connect(function(enterPressed)
@@ -80,25 +84,24 @@ function CodesPanel.Create(content: Frame, ctx)
 		end
 	end)
 
-	local info =
-		UIKit.Inset({ Position = UDim2.fromOffset(40, 304), Size = UDim2.new(1, -80, 0, 112), Parent = content })
-	UIKit.Text({
+	local info = UIKit.Card({ Position = UDim2.fromOffset(40, 250), Size = UDim2.new(1, -80, 0, 96), Parent = content })
+	UIKit.Label({
 		Text = "📣 De nouveaux codes à chaque mise à jour !",
-		TextSize = 21,
+		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(10, 14),
-		Size = UDim2.new(1, -20, 0, 30),
-		Stroke = 2.4,
+		Position = UDim2.fromOffset(16, 14),
+		Size = UDim2.new(1, -32, 0, 24),
 		Fit = true,
 		Parent = info,
 	})
 	UIKit.Body({
 		Text = "Ajoute le jeu en favori ⭐ et rejoins le groupe pour ne rater aucun code ni aucun événement.",
+		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextSize = 16,
-		Position = UDim2.fromOffset(20, 52),
-		Size = UDim2.new(1, -40, 0, 44),
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Position = UDim2.fromOffset(24, 44),
+		Size = UDim2.new(1, -48, 0, 40),
 		Parent = info,
 	})
 

@@ -4,23 +4,22 @@
 	Construit toute l'interface (ScreenGui "RiftUI") :
 	- un cadre racine mis à l'échelle selon la taille de l'écran (UIScale), pour
 	  que la même interface soit lisible sur PC, tablette et téléphone ;
-	- HUD, notifications ;
-	- une fenêtre unique (bandeau coloré + icône + bouton fermer) qui affiche un
-	  panneau à la fois, avec animation d'ouverture.
+	- HUD, fil d'actualité, notifications ;
+	- une fenêtre unique (corps blanc, en-tête violet de marque, bouton fermer) qui
+	  affiche un panneau à la fois, avec animation d'ouverture.
 ]]
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
-local Format = require(game:GetService("ReplicatedStorage").Shared.Modules.Format)
 local Theme = require(script.Parent.Theme)
 local UIKit = require(script.Parent.UIKit)
 local HUD = require(script.Parent.HUD)
 local Notifications = require(script.Parent.Notifications)
 local Feed = require(script.Parent.Feed)
-local RunService = game:GetService("RunService")
 
 local Panels = script.Parent.Panels
 local PANEL_MODULES = {
@@ -43,16 +42,17 @@ local UIController = {}
 -- Accès aux modules de panneaux (le HUD s'en sert pour ses pastilles rouges)
 UIController.Panels = PANEL_MODULES
 
--- Taille de la fenêtre ; un panneau peut demander une hauteur plus petite (Panel.Height)
-local WINDOW_SIZE = Vector2.new(860, 560)
+-- Taille de la fenêtre ; un panneau peut demander une hauteur différente (Panel.Height)
+local WINDOW_SIZE = Vector2.new(760, 520)
+-- Marges du contenu dans la fenêtre (grille de 8 px)
+local CONTENT_SIDE = 20
+local CONTENT_TOP = UIKit.HeaderHeight + 16
+local CONTENT_BOTTOM = 20
 
 local overlay: TextButton
 local window: TextButton
 local windowScale: UIScale
-local header: Frame
-local headerGradient: UIGradient
-local headerFillGradient: UIGradient
-local headerIcon: Frame
+local headerIcon: TextLabel
 local titleLabel: TextLabel
 local panels: { [string]: { Frame: Frame, Instance: any } } = {}
 local openName: string? = nil
@@ -62,8 +62,8 @@ local availableHeight = Theme.ReferenceSize.Y
 local windowFit = 1
 
 local function fitFor(height: number): number
-	-- 52 : marge pour l'icône et le bouton fermer qui dépassent du bord haut
-	return math.min(1, (availableHeight - 52) / height)
+	-- 16 : petite marge pour l'ombre portée sous la fenêtre
+	return math.min(1, (availableHeight - 16) / height)
 end
 
 function UIController.IsOpen(name: string): boolean
@@ -95,18 +95,11 @@ function UIController.Open(name: string, arg: any?)
 	end
 	local wasOpen = openName ~= nil
 	openName = name
+	HUD.SetDrawerOpen(false)
 
-	-- Bandeau aux couleurs du panneau
-	local palette = Theme.Palette[module.Color or "Blue"] or Theme.Palette.Blue
-	headerGradient.Color = ColorSequence.new(palette[1], palette[2])
-	headerFillGradient.Color = ColorSequence.new(palette[1]:Lerp(palette[2], 0.5), palette[2])
-	titleLabel.Text = Format.Upper(module.Title)
-	local glyph = headerIcon:FindFirstChild("Glyph") :: TextLabel
-	glyph.Text = module.Icon or "⭐"
-	local iconGradient = headerIcon:FindFirstChildOfClass("UIGradient")
-	if iconGradient then
-		iconGradient.Color = ColorSequence.new(Theme.Lighten(palette[1], 0.35), palette[2])
-	end
+	-- En-tête : même violet de marque pour toutes les fenêtres, icône + titre du panneau
+	titleLabel.Text = module.Title
+	headerIcon.Text = module.Icon or "⭐"
 
 	-- Hauteur propre au panneau (les panneaux courts n'ont pas de grand vide)
 	local height = module.Height or WINDOW_SIZE.Y
@@ -119,8 +112,8 @@ function UIController.Open(name: string, arg: any?)
 	overlay.Visible = true
 	Feed.SetVisible(false)
 	if not wasOpen then
-		windowScale.Scale = 0.7 * windowFit
-		TweenService:Create(windowScale, TweenInfo.new(0.32, Enum.EasingStyle.Back), { Scale = windowFit }):Play()
+		windowScale.Scale = 0.8 * windowFit
+		TweenService:Create(windowScale, TweenInfo.new(0.28, Enum.EasingStyle.Back), { Scale = windowFit }):Play()
 	end
 	if panel.Instance.OnOpen then
 		panel.Instance.OnOpen(arg)
@@ -167,8 +160,8 @@ end
 --[[
 	Échelle de l'interface selon la taille de l'écran, pour que la même interface
 	soit lisible sur PC, tablette et téléphone. Sur les écrans peu hauts (téléphone
-	en paysage), disposition compacte : menu en 3 colonnes, rail en grille en haut à
-	droite, ce qui permet une interface plus grande.
+	en paysage), disposition compacte : l'interface est calculée pour une hauteur de
+	référence plus petite, donc affichée plus grande.
 ]]
 local function setupLayout(root: Frame, padding: UIPadding)
 	local scale = UIKit.New("UIScale", { Parent = root })
@@ -186,31 +179,33 @@ local function setupLayout(root: Frame, padding: UIPadding)
 		-- Hauteur utile (unités de l'interface) : la fenêtre rétrécit si elle ne tient pas
 		availableHeight = viewport.Y / value - padding.PaddingTop.Offset - padding.PaddingBottom.Offset
 		if window then
-			window.Position = if compact then UDim2.new(0.5, 30, 0.5, 6) else UDim2.new(0.5, 40, 0.5, 30)
+			window.Position = if compact then UDim2.new(0.5, 0, 0.5, 2) else UDim2.new(0.5, 0, 0.5, 10)
 			if openName then
 				windowFit = fitFor(window.Size.Y.Offset)
 				windowScale.Scale = windowFit
 			end
 		end
-		-- La colonne de gauche (argent) passe sous les boutons Roblox du haut
+
+		-- L'argent passe sous les boutons Roblox du haut
 		HUD.ApplyLayout({
 			Compact = compact,
-			LeftOffset = math.max(10, math.ceil(topInset() / value) - padding.PaddingTop.Offset + 6),
+			LeftOffset = math.max(8, math.ceil(topInset() / value) - padding.PaddingTop.Offset + 8),
 		})
 
-		-- Toasts : à gauche du rail (colonne sur grand écran, grille 2 x 2 en compact) ;
-		-- jamais sur le bouton de saut tactile
-		local toastRight = if compact then 204 else 110
-		local toastBottom = 16
+		-- Zone du bouton de saut tactile en unités d'interface, depuis le bord du contenu
 		local jump = jumpButtonZone(viewport)
+		local jumpWidth = if jump then math.ceil(jump.X / value - padding.PaddingRight.Offset + 12) else 0
+		local jumpHeight = if jump then math.ceil(jump.Y / value - padding.PaddingBottom.Offset + 12) else 0
+
+		-- Toasts en bas à droite (le côté droit du HUD est libre) ; jamais sur le bouton
+		-- de saut tactile : à sa gauche sur téléphone, au-dessus sur tablette
+		local toastRight = 16
+		local toastBottom = 16
 		if jump then
-			-- Zone du bouton de saut en unités d'interface, depuis le bord du contenu
-			local jumpWidth = math.ceil(jump.X / value - padding.PaddingRight.Offset + 12)
-			local jumpHeight = math.ceil(jump.Y / value - padding.PaddingBottom.Offset + 12)
 			if compact then
-				toastRight = math.max(toastRight, jumpWidth) -- à gauche du bouton
-			elseif toastRight < jumpWidth then
-				toastBottom = math.max(toastBottom, jumpHeight) -- au-dessus (tablettes)
+				toastRight = math.max(toastRight, jumpWidth)
+			else
+				toastBottom = math.max(toastBottom, jumpHeight)
 			end
 		end
 		Notifications.ApplyLayout({ Compact = compact, RightOffset = toastRight, BottomOffset = toastBottom })
@@ -222,15 +217,14 @@ local function setupLayout(root: Frame, padding: UIPadding)
 	return update
 end
 
-local HEADER_HEIGHT = 76
-
 local function buildWindow(root: Frame)
 	overlay = UIKit.New("TextButton", {
 		Name = "Overlay",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = Color3.fromRGB(4, 14, 44),
-		BackgroundTransparency = 0.42,
+		Selectable = false,
+		BackgroundColor3 = Theme.Ink,
+		BackgroundTransparency = 0.45,
 		-- Déborde de la marge de sécurité du cadre racine pour couvrir tout l'écran
 		Position = UDim2.fromOffset(-60, -120),
 		Size = UDim2.new(1, 120, 1, 240),
@@ -240,120 +234,18 @@ local function buildWindow(root: Frame)
 	})
 	overlay.Activated:Connect(UIController.Close)
 
-	-- Corps bleu vif, contour noir épais. C'est un bouton (sans texte ni effet) pour
-	-- absorber les clics : un Frame les laisse passer jusqu'au fond, et un tap à côté
-	-- d'un bouton fermait la fenêtre.
-	window = UIKit.New("TextButton", {
-		Name = "Window",
-		Text = "",
-		AutoButtonColor = false,
-		Selectable = false,
+	local chrome = UIKit.Window({
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 40, 0.5, 30),
+		Position = UDim2.new(0.5, 0, 0.5, 10),
 		Size = UDim2.fromOffset(WINDOW_SIZE.X, WINDOW_SIZE.Y),
-		BackgroundColor3 = Color3.new(1, 1, 1),
 		Visible = false,
 		ZIndex = 21,
 		Parent = root,
-	})
+	}, { OnClose = UIController.Close })
+	window = chrome.Instance
+	headerIcon = chrome.Icon
+	titleLabel = chrome.Title
 	windowScale = UIKit.New("UIScale", { Parent = window })
-	UIKit.Corner(window, 24)
-	UIKit.Stroke(window, 5)
-	UIKit.Gradient(window, Theme.PanelTop, Theme.PanelBottom)
-	-- Liseré clair à l'intérieur du contour (relief)
-	local rim = UIKit.New("Frame", {
-		Name = "Rim",
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(4, 4),
-		Size = UDim2.new(1, -8, 1, -8),
-		ZIndex = 21,
-		Parent = window,
-	})
-	UIKit.Corner(rim, 20)
-	UIKit.Stroke(rim, 2.5, Color3.new(1, 1, 1), 0.6)
-
-	-- En-tête coloré : coins arrondis en haut, bord bas droit souligné de noir
-	header = UIKit.New("Frame", {
-		Name = "Header",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Size = UDim2.new(1, 0, 0, HEADER_HEIGHT),
-		ZIndex = 22,
-		Parent = window,
-	})
-	UIKit.Corner(header, 24)
-	headerGradient = UIKit.Gradient(header, Theme.Palette.Blue[1], Theme.Palette.Blue[2])
-	local headerFill = UIKit.New("Frame", {
-		Name = "Fill",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BorderSizePixel = 0,
-		Position = UDim2.fromScale(0, 0.5),
-		Size = UDim2.fromScale(1, 0.5),
-		ZIndex = 22,
-		Parent = header,
-	})
-	headerFillGradient = UIKit.Gradient(headerFill, Theme.Palette.Blue[1], Theme.Palette.Blue[2])
-	UIKit.New("Frame", {
-		Name = "Separator",
-		BackgroundColor3 = Theme.Ink,
-		BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.fromScale(0, 1),
-		Size = UDim2.new(1, 0, 0, 4),
-		ZIndex = 23,
-		Parent = header,
-	})
-	local shine = UIKit.New("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.78,
-		Position = UDim2.fromOffset(12, 6),
-		Size = UDim2.new(1, -24, 0, 24),
-		ZIndex = 23,
-		Parent = header,
-	})
-	UIKit.Corner(shine, 12)
-	headerIcon = UIKit.IconCircle("⭐", Theme.Gold, 88, {
-		Position = UDim2.fromOffset(-24, -24),
-		ZIndex = 25,
-		Parent = header,
-	})
-	titleLabel = UIKit.Text({
-		Name = "Title",
-		Text = "",
-		TextSize = 38,
-		TextWrapped = false,
-		Position = UDim2.fromOffset(80, 2),
-		Size = UDim2.new(1, -150, 1, -6),
-		Stroke = 4,
-		Fit = true,
-		ZIndex = 24,
-		Parent = header,
-	})
-
-	-- Bouton fermer : rond rouge, X blanc contour noir
-	local close = UIKit.Button({
-		Name = "Close",
-		Text = "X",
-		Color = "Red",
-		TextSize = 32,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 20, 0, -20),
-		Size = UDim2.fromOffset(64, 64),
-		ZIndex = 26,
-		OnClick = UIController.Close,
-		Parent = window,
-	})
-	close.Face:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0.5, 0)
-	close.Instance:FindFirstChild("Shadow"):FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0.5, 0)
-	local closeShine = close.Face:FindFirstChild("Shine")
-	if closeShine then
-		closeShine:Destroy()
-	end
-	local closeStroke = close.Instance:FindFirstChild("Shadow"):FindFirstChildOfClass("UIStroke")
-	if closeStroke then
-		closeStroke.Thickness = 4
-	end
-	close.Label.Position = UDim2.new(0.5, 0, 0.5, 2)
 end
 
 function UIController.Start(ctx)
@@ -389,10 +281,10 @@ function UIController.Start(ctx)
 		local frame = UIKit.New("Frame", {
 			Name = name,
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(22, 92),
-			Size = UDim2.new(1, -44, 1, -110),
+			Position = UDim2.fromOffset(CONTENT_SIDE, CONTENT_TOP),
+			Size = UDim2.new(1, -2 * CONTENT_SIDE, 1, -(CONTENT_TOP + CONTENT_BOTTOM)),
 			Visible = false,
-			ZIndex = 22,
+			ZIndex = 23,
 			Parent = window,
 		})
 		panels[name] = { Frame = frame, Instance = module.Create(frame, ctx) }
@@ -435,8 +327,13 @@ function UIController.Start(ctx)
 	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
-		if not processed and input.KeyCode == Enum.KeyCode.Escape then
+		if processed or input.KeyCode ~= Enum.KeyCode.Escape then
+			return
+		end
+		if openName then
 			UIController.Close()
+		else
+			HUD.SetDrawerOpen(false)
 		end
 	end)
 end

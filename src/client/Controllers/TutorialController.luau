@@ -16,6 +16,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local HUD = require(script.Parent.Parent.UI.HUD)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local UIKit = require(script.Parent.Parent.UI.UIKit)
 
@@ -170,64 +171,94 @@ function TutorialController.Start(ctx)
 
 	---------------------------------------------------------------- Interface
 	local root = ctx.Root
-	-- En haut, sous le bandeau de dimension : le bas de l'écran reste libre pour
-	-- le bandeau de vol, la vengeance et la barrière (utilisés pendant le tutoriel)
-	local plate = UIKit.Plate({
+	-- Carte blanche en haut, sous la pilule d'événement : le bas de l'écran reste libre
+	-- pour le bandeau de vol, la vengeance et la barrière (utilisés pendant le tutoriel).
+	-- Assez étroite pour ne jamais toucher le fil d'actualité (en haut à droite).
+	local card = UIKit.New("Frame", {
 		Name = "Tutorial",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 180),
-		Size = UDim2.fromOffset(690, 116),
+		Position = UDim2.new(0.5, 0, 0, 60),
+		Size = UDim2.fromOffset(500, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = Color3.new(1, 1, 1),
 		ZIndex = 15,
-		StrokeThickness = 4,
 		Parent = root,
-	}, "Blue", 6, 20)
-	local card = plate.Instance
-	local face = plate.Face
-	UIKit.IconCircle("🧭", Theme.Gold, 84, {
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, -18, 0.5, 0),
-		ZIndex = 19,
+	})
+	UIKit.Corner(card, 16)
+	UIKit.Stroke(card, 3)
+	UIKit.Padding(card, 14, 18, 16, 16)
+	UIKit.IconCircle("🧭", Theme.Brand, 52, { Parent = card })
+	local column = UIKit.New("Frame", {
+		Name = "Column",
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(66, 0),
+		Size = UDim2.new(1, -66, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
 		Parent = card,
 	})
-	-- Ruban "TUTORIEL x / y" à cheval sur le bord haut
-	local stepPill = UIKit.Pill("TUTORIEL", Color3.fromRGB(255, 176, 0), {
+	UIKit.List(column, Enum.FillDirection.Vertical, 4)
+	-- Étape (violet de marque) + « Passer » discret
+	local header = UIKit.New("Frame", {
+		Name = "Header",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 22),
+		LayoutOrder = 1,
+		Parent = column,
+	})
+	local stepLabel = UIKit.Label({
 		Name = "Step",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromOffset(84, 0),
-		Size = UDim2.fromOffset(0, 28),
-		TextSize = 16,
-		ZIndex = 19,
-		Parent = card,
+		Text = "Tutoriel",
+		TextSize = 15,
+		TextColor3 = Theme.Brand,
+		TextWrapped = false,
+		Size = UDim2.new(1, -90, 1, 0),
+		Parent = header,
 	})
-	local stepLabel = stepPill:FindFirstChild("Text") :: TextLabel
-	stepLabel.ZIndex = 20
-	local textLabel = UIKit.Body({
+	local skipButton = UIKit.New("TextButton", {
+		Name = "Skip",
+		Text = "Passer",
+		Font = Theme.Font,
+		TextSize = 15,
+		TextColor3 = Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.new(0, 80, 1, 0),
+		Parent = header,
+	})
+	local textLabel = UIKit.Label({
+		Name = "Text",
 		Text = "",
-		TextSize = 19,
-		TextColor3 = Theme.Text,
-		TextYAlignment = Enum.TextYAlignment.Center,
-		Position = UDim2.fromOffset(84, 16),
-		Size = UDim2.new(1, -278, 1, -24),
-		Stroke = 1.8,
-		ZIndex = 17,
-		Parent = face,
+		TextSize = 17,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		LayoutOrder = 2,
+		Parent = column,
+	})
+	-- Bouton « Suivant » sous le texte, à droite (seulement pour les étapes qui en ont un)
+	local actions = UIKit.New("Frame", {
+		Name = "Actions",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 52),
+		LayoutOrder = 3,
+		Parent = column,
 	})
 	local nextButton
-	local skipButton
 
-	-- Mise en évidence du bouton de barrière
+	-- Mise en évidence du bouton de barrière : anneau doré autour du vrai bouton
 	local highlight = UIKit.New("Frame", {
 		Name = "BarrierHighlight",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -3),
-		Size = UDim2.fromOffset(400, 92),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, 18, 1, 18),
 		BackgroundTransparency = 1,
 		Visible = false,
-		ZIndex = 14,
-		Parent = root,
+		ZIndex = 8,
 	})
-	UIKit.Corner(highlight, 22)
-	UIKit.Stroke(highlight, 6, Theme.Gold)
+	UIKit.Corner(highlight, 20)
+	UIKit.Stroke(highlight, 4, Theme.Gold)
 	local highlightScale = UIKit.New("UIScale", { Parent = highlight })
 
 	---------------------------------------------------------------- Flèche dans le monde
@@ -300,6 +331,7 @@ function TutorialController.Start(ctx)
 		end
 		card:Destroy()
 		highlight:Destroy()
+		HUD.SetBarrierHint(false)
 		targetPart:Destroy()
 		characterConnection:Disconnect()
 		if playerAttachment then
@@ -310,16 +342,17 @@ function TutorialController.Start(ctx)
 	local function showStep()
 		local step = steps[index]
 		stepStarted = os.clock()
-		stepLabel.Text = string.format("TUTORIEL • %d / %d", index, #steps)
+		stepLabel.Text = string.format("Tutoriel · %d / %d", index, #steps)
 		textLabel.Text = step.Text
-		-- Sans bouton "Suivant", le texte prend la place libérée
-		textLabel.Size = UDim2.new(1, if step.Button then -278 else -206, 1, -24)
-		highlight.Visible = step.HighlightBarrier == true
-		nextButton.Instance.Visible = step.Button ~= nil
+		actions.Visible = step.Button ~= nil
 		if step.Button then
 			nextButton:SetText(step.Button)
 		end
-		UIKit.Pop(card, 0.85)
+		-- Étape de la barrière : le HUD affiche le bouton même hors de la base
+		local barrier = HUD.SetBarrierHint(step.HighlightBarrier == true)
+		highlight.Parent = if step.HighlightBarrier then barrier else nil
+		highlight.Visible = step.HighlightBarrier == true
+		UIKit.Pop(card, 0.9)
 	end
 
 	local function advance()
@@ -336,30 +369,20 @@ function TutorialController.Start(ctx)
 	nextButton = UIKit.Button({
 		Text = "Suivant",
 		Color = "Green",
-		TextSize = 20,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -14, 0, 10),
-		Size = UDim2.fromOffset(170, 54),
-		ZIndex = 18,
-		Parent = face,
+		TextSize = 18,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.fromScale(1, 1),
+		Size = UDim2.fromOffset(170, 44),
+		Parent = actions,
 		OnClick = advance,
 	})
-	skipButton = UIKit.Button({
-		Text = "Passer",
-		Color = "Dark",
-		TextSize = 16,
-		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -14, 1, -8),
-		Size = UDim2.fromOffset(100, 34),
-		Radius = 10,
-		ZIndex = 18,
-		Parent = face,
-		OnClick = function()
-			ctx.Net.Invoke("CompleteTutorial", "Skip")
-			cleanup()
-		end,
-	})
-	local _ = skipButton
+	skipButton.Activated:Connect(function()
+		if UIKit.OnClick then
+			UIKit.OnClick()
+		end
+		ctx.Net.Invoke("CompleteTutorial", "Skip")
+		cleanup()
+	end)
 
 	showStep()
 
@@ -392,8 +415,8 @@ function TutorialController.Start(ctx)
 	end)
 
 	-- Petite animation d'attention sur la carte
-	TweenService:Create(card, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-		Position = UDim2.new(0.5, 0, 0, 174),
+	TweenService:Create(card, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+		Position = UDim2.new(0.5, 0, 0, 56),
 	}):Play()
 end
 

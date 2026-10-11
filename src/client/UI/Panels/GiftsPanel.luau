@@ -14,16 +14,16 @@ local Widgets = require(script.Parent.Parent.Widgets)
 
 local GiftsPanel = {}
 GiftsPanel.Title = "Cadeaux de session"
-GiftsPanel.Icon = "⏰"
-GiftsPanel.Color = "Pink"
+GiftsPanel.Icon = "🎁"
+GiftsPanel.Height = 532
 
 local GIFTS = GameConfig.Playtime.Gifts
 local TYPE_ICONS = { Money = "💰", Boost = "⚡", Creature = "🐾", Bundle = "🎁" }
 local TYPE_COLORS = {
-	Money = Color3.fromRGB(40, 200, 60),
-	Boost = Color3.fromRGB(255, 150, 0),
-	Creature = Color3.fromRGB(170, 70, 255),
-	Bundle = Color3.fromRGB(255, 190, 0),
+	Money = Theme.Money,
+	Boost = Theme.Warning,
+	Creature = Theme.Brand,
+	Bundle = Theme.Gold,
 }
 
 -- Secondes de session estimées à partir du dernier instantané
@@ -65,12 +65,8 @@ function GiftsPanel.NextUnlockIn(profile): number?
 end
 
 function GiftsPanel.Create(content: Frame, ctx)
-	local top = Widgets.Row({ Size = UDim2.new(1, 0, 0, 40), Parent = content }, 10)
-	local sessionPill = UIKit.Pill(
-		"⏱️ Session : 0:00",
-		Theme.Info,
-		{ Parent = top, LayoutOrder = 1, Size = UDim2.fromOffset(0, 36), TextSize = 17 }
-	)
+	local top = Widgets.Row({ Size = UDim2.new(1, 0, 0, 40), Parent = content }, 8)
+	local sessionChip = UIKit.Chip("⏱️ Session : 0:00", { LayoutOrder = 1, Parent = top })
 	UIKit.Body({
 		Text = "Reste connecté pour tout débloquer !",
 		TextWrapped = false,
@@ -88,8 +84,8 @@ function GiftsPanel.Create(content: Frame, ctx)
 	})
 	UIKit.New("UIGridLayout", {
 		-- -10 (et non -8) : marge pour que 3 colonnes tiennent malgré les arrondis
-		CellSize = UDim2.new(1 / 3, -10, 0, 120),
-		CellPadding = UDim2.fromOffset(12, 10),
+		CellSize = UDim2.new(1 / 3, -10, 0, 116),
+		CellPadding = UDim2.fromOffset(12, 12),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = grid,
 	})
@@ -104,51 +100,46 @@ function GiftsPanel.Create(content: Frame, ctx)
 			Size = UDim2.fromScale(1, 1),
 			Parent = holder,
 		})
-		local gradient = card:FindFirstChildOfClass("UIGradient") :: UIGradient
-		local stroke = card:FindFirstChildOfClass("UIStroke") :: UIStroke
 		local icon = UIKit.IconTile(
 			TYPE_ICONS[gift.Reward.Type] or "🎁",
 			TYPE_COLORS[gift.Reward.Type] or Theme.Gold,
-			56,
-			{ Position = UDim2.fromOffset(10, 10), Parent = card }
+			48,
+			{ Position = UDim2.fromOffset(12, 12), Parent = card }
 		)
-		UIKit.Text({
+		UIKit.Label({
 			Text = gift.Minutes .. " min",
-			TextSize = 22,
+			TextSize = 18,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(76, 9),
-			Size = UDim2.new(1, -86, 0, 26),
-			Stroke = 2.6,
+			Position = UDim2.fromOffset(70, 12),
+			Size = UDim2.new(1, -80, 0, 22),
 			Parent = card,
 		})
-		-- Argent : gros chiffre vert (code couleur) ; autres récompenses : texte courant
+		-- Argent : montant en vert ; autres récompenses : texte secondaire
 		local isMoney = gift.Reward.Type == "Money"
-		local preview = UIKit.Text({
+		local preview = UIKit.Label({
 			Text = "",
-			Font = if isMoney then Theme.Font else Theme.BodyFont,
-			TextColor3 = if isMoney then Theme.Money else Theme.Text,
-			TextSize = if isMoney then 21 else 16,
-			TextWrapped = not isMoney,
-			TextYAlignment = Enum.TextYAlignment.Top,
-			Position = UDim2.fromOffset(76, 36),
-			Size = UDim2.new(1, -86, 0, 34),
-			Stroke = if isMoney then 2.4 else 1.6,
+			TextSize = if isMoney then 17 else 15,
+			TextColor3 = if isMoney then Theme.MoneyText else Theme.TextMuted,
+			TextWrapped = false,
+			Position = UDim2.fromOffset(70, 36),
+			Size = UDim2.new(1, -80, 0, 22),
+			Fit = true,
 			Parent = card,
 		})
 		local button = UIKit.Button({
 			Text = "",
-			Color = "Gold",
-			TextSize = 17,
-			Position = UDim2.new(0, 10, 1, -52),
-			Size = UDim2.new(1, -20, 0, 44),
+			Color = "Green",
+			TextSize = 16,
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 12, 1, -10),
+			Size = UDim2.new(1, -24, 0, 40),
 			ZIndex = 2,
 			Parent = card,
 			OnClick = function()
 				ctx.Net.Request("ClaimGift", index)
 			end,
 		})
-		cells[index] =
-			{ Card = card, Gradient = gradient, Stroke = stroke, Icon = icon, Preview = preview, Button = button }
+		cells[index] = { Card = card, Icon = icon, Preview = preview, Button = button }
 	end
 
 	local self = {} :: any
@@ -160,7 +151,7 @@ function GiftsPanel.Create(content: Frame, ctx)
 			return
 		end
 		local seconds = GiftsPanel.GetSessionSeconds(profile)
-		Widgets.SetPillText(sessionPill, "⏱️ Session : " .. Format.Time(seconds))
+		Widgets.SetPillText(sessionChip, "⏱️ Session : " .. Format.Time(seconds))
 		local claimed = {}
 		for _, index in gifts.Claimed do
 			claimed[index] = true
@@ -170,25 +161,18 @@ function GiftsPanel.Create(content: Frame, ctx)
 			cell.Preview.Text = (gifts.Previews and gifts.Previews[index]) or ""
 			local unlockAt = gift.Minutes * 60
 			local ready = not claimed[index] and seconds >= unlockAt
-			-- À ouvrir : la carte la plus vive (or) et qui pulse ; déjà ouvert : bleu nuit
-			-- éteint ; à venir : carte normale avec le compte à rebours
+			-- À ouvrir : carte dorée qui pulse ; déjà ouvert : grisé ; à venir : neutre
 			local glyph = cell.Icon:FindFirstChild("Glyph") :: TextLabel
-			glyph.TextTransparency = if claimed[index] then 0.4 else 0
-			cell.Stroke.Thickness = if ready then 5 else 3
-			UIKit.Pulse(cell.Card, ready, 0.04)
+			glyph.TextTransparency = if claimed[index] then 0.45 else 0
+			UIKit.SetCardTint(cell.Card, if ready then Theme.Gold elseif claimed[index] then Theme.Disabled else nil)
+			UIKit.Pulse(cell.Card, ready, 0.03)
 			if claimed[index] then
-				cell.Gradient.Color = ColorSequence.new(Theme.Lighten(Theme.Inset, 0.15), Theme.Inset)
-				cell.Button:SetText("✅ OUVERT")
-				cell.Button:SetEnabled(false)
+				cell.Button:SetStatus("✅ Ouvert")
 			elseif ready then
-				cell.Gradient.Color = ColorSequence.new(Theme.Palette.Gold[1], Theme.Palette.Gold[2])
-				cell.Button:SetText("🎁 OUVRIR !")
-				cell.Button:SetColor("Green")
+				cell.Button:SetText("🎁 Ouvrir !")
 				cell.Button:SetEnabled(true)
 			else
-				cell.Gradient.Color = ColorSequence.new(Theme.CardTop, Theme.CardBottom)
-				cell.Button:SetText("🔒 " .. Format.Time(unlockAt - seconds))
-				cell.Button:SetEnabled(false)
+				cell.Button:SetStatus("🔒 " .. Format.Time(unlockAt - seconds))
 			end
 		end
 	end

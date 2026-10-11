@@ -15,7 +15,7 @@ local Widgets = require(script.Parent.Parent.Widgets)
 local QuestsPanel = {}
 QuestsPanel.Title = "Quêtes du jour"
 QuestsPanel.Icon = "📜"
-QuestsPanel.Color = "Gold"
+QuestsPanel.Height = 556
 
 local ICONS = {
 	Buy = "🛒",
@@ -27,85 +27,78 @@ local ICONS = {
 	Recover = "🛡️",
 }
 -- Couleur de la tuile selon le type de quête (code couleur du jeu : vert = acheter,
--- rouge = vol / barrière, violet = rare / magique, bleu = infos)
+-- rouge = vol / barrière, violet = rare / fusion, bleu = infos)
 local COLORS = {
-	Buy = Color3.fromRGB(40, 200, 60),
-	BuyRare = Color3.fromRGB(170, 70, 255),
-	Steal = Color3.fromRGB(255, 60, 60),
-	Fuse = Color3.fromRGB(170, 70, 255),
-	Barrier = Color3.fromRGB(255, 60, 60),
-	Minute = Color3.fromRGB(40, 140, 255),
-	Recover = Color3.fromRGB(0, 180, 230),
+	Buy = Theme.Money,
+	BuyRare = Theme.Brand,
+	Steal = Theme.Danger,
+	Fuse = Theme.Brand,
+	Barrier = Theme.Danger,
+	Minute = Theme.Info,
+	Recover = Theme.Info,
 }
 local TIER_NAMES = { "Facile", "Moyenne", "Difficile" }
-local TIER_COLORS = { Color3.fromRGB(40, 200, 60), Color3.fromRGB(255, 150, 0), Color3.fromRGB(255, 50, 60) }
+local TIER_COLORS = { Theme.Money, Theme.Warning, Theme.Danger }
 
 function QuestsPanel.Create(content: Frame, ctx)
-	local timerPill = UIKit.Pill("⏳ Nouvelles quêtes dans 0:00", Theme.Info, {
-		Size = UDim2.fromOffset(0, 36),
-		TextSize = 17,
-		Parent = content,
-	})
+	local timerChip = UIKit.Chip("⏳ Nouvelles quêtes dans 0:00", { Parent = content })
 
 	local list = UIKit.New("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 48),
-		Size = UDim2.new(1, 0, 0, 302),
+		Position = UDim2.fromOffset(0, 52),
+		Size = UDim2.new(1, 0, 0, 308),
 		Parent = content,
 	})
 	UIKit.List(list, Enum.FillDirection.Vertical, 10)
 
 	local rows = {}
 	for index = 1, Quests.PerDay do
-		local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 94), LayoutOrder = index, Parent = list })
-		local icon = UIKit.IconTile("📜", Theme.Info, 70, {
-			Position = UDim2.fromOffset(14, 6),
+		local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 96), LayoutOrder = index, Parent = list })
+		local icon = UIKit.IconTile("📜", Theme.Info, 56, {
+			Position = UDim2.fromOffset(16, 10),
 			Parent = card,
 		})
 		-- Difficulté : ruban sous l'icône
 		local tierPill = UIKit.Pill("Facile", TIER_COLORS[1], {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromOffset(49, 78),
-			Size = UDim2.fromOffset(0, 24),
-			TextSize = 15,
+			Position = UDim2.fromOffset(44, 74),
+			Size = UDim2.fromOffset(0, 22),
+			TextSize = 13,
 			ZIndex = 2,
 			Parent = card,
 		})
-		local title = UIKit.Body({
+		local title = UIKit.Label({
 			Text = "",
-			TextSize = 21,
-			TextColor3 = Theme.Text,
+			TextSize = 19,
 			TextWrapped = false,
-			Position = UDim2.fromOffset(100, 9),
-			Size = UDim2.new(1, -316, 0, 28),
-			Stroke = 2,
+			Position = UDim2.fromOffset(92, 14),
+			Size = UDim2.new(1, -310, 0, 24),
 			Fit = true,
 			Parent = card,
 		})
 		local bar = UIKit.ProgressBar(
-			{ Position = UDim2.fromOffset(100, 46), Size = UDim2.new(1, -316, 0, 32), Parent = card },
-			Color3.fromRGB(255, 190, 0)
+			{ Position = UDim2.fromOffset(92, 50), Size = UDim2.new(1, -310, 0, 26), Parent = card },
+			Theme.Gold
 		)
-		local reward = UIKit.Text({
+		local reward = UIKit.Label({
 			Text = "",
-			TextSize = 18,
-			TextColor3 = Theme.Money,
+			TextSize = 17,
+			TextColor3 = Theme.MoneyText,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextWrapped = false,
 			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -14, 0, 7),
-			Size = UDim2.fromOffset(190, 26),
-			Stroke = 2.2,
+			Position = UDim2.new(1, -16, 0, 10),
+			Size = UDim2.fromOffset(184, 22),
 			Fit = true,
 			Parent = card,
 		})
 		local button = UIKit.Button({
-			Text = "RÉCLAMER",
-			Color = "Gold",
-			TextSize = 19,
+			Text = "Réclamer",
+			Color = "Green",
+			TextSize = 18,
 			AnchorPoint = Vector2.new(1, 1),
-			Position = UDim2.new(1, -14, 1, -9),
-			Size = UDim2.fromOffset(190, 50),
+			Position = UDim2.new(1, -16, 1, -12),
+			Size = UDim2.fromOffset(184, 46),
 			ZIndex = 2,
 			Parent = card,
 			OnClick = function()
@@ -116,43 +109,41 @@ function QuestsPanel.Create(content: Frame, ctx)
 			{ Card = card, Icon = icon, Title = title, Tier = tierPill, Bar = bar, Reward = reward, Button = button }
 	end
 
-	-- Bonus de fin de journée
+	-- Bonus de fin de journée (carte dorée : c'est une récompense)
 	local bonusCard = UIKit.Card({
-		Position = UDim2.fromOffset(0, 362),
-		Size = UDim2.new(1, 0, 0, 86),
+		Position = UDim2.fromOffset(0, 372),
+		Size = UDim2.new(1, 0, 0, 84),
 		Parent = content,
-	}, Color3.fromRGB(255, 176, 0))
-	UIKit.IconTile("🏆", Color3.fromRGB(255, 120, 0), 66, {
+	}, Theme.Gold)
+	UIKit.IconTile("🏆", Theme.Gold, 56, {
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 14, 0.5, 0),
+		Position = UDim2.new(0, 16, 0.5, 0),
 		Parent = bonusCard,
 	})
-	UIKit.Text({
-		Text = "BONUS : termine les 3 quêtes !",
-		TextSize = 22,
+	UIKit.Label({
+		Text = "Bonus : termine les 3 quêtes !",
+		TextSize = 19,
 		TextWrapped = false,
-		Position = UDim2.fromOffset(96, 9),
-		Size = UDim2.new(1, -316, 0, 30),
-		Stroke = 2.8,
+		Position = UDim2.fromOffset(92, 14),
+		Size = UDim2.new(1, -310, 0, 24),
 		Fit = true,
 		Parent = bonusCard,
 	})
 	UIKit.Body({
 		Text = "⚡ Argent x2 pendant 15 min + 🐾 créature Épique ou Légendaire",
-		TextColor3 = Theme.Text,
-		Position = UDim2.fromOffset(96, 40),
-		Size = UDim2.new(1, -316, 0, 38),
+		TextSize = 15,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		Stroke = 1.6,
+		Position = UDim2.fromOffset(92, 42),
+		Size = UDim2.new(1, -310, 0, 38),
 		Parent = bonusCard,
 	})
 	local bonusButton = UIKit.Button({
-		Text = "🎁 BONUS",
+		Text = "🎁 Bonus",
 		Color = "Green",
-		TextSize = 21,
+		TextSize = 18,
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.fromOffset(190, 58),
+		Position = UDim2.new(1, -16, 0.5, 0),
+		Size = UDim2.fromOffset(184, 46),
 		ZIndex = 2,
 		Parent = bonusCard,
 		OnClick = function()
@@ -169,7 +160,7 @@ function QuestsPanel.Create(content: Frame, ctx)
 			return
 		end
 		Widgets.SetPillText(
-			timerPill,
+			timerChip,
 			"⏳ Nouvelles quêtes dans " .. Format.Time(quests.ResetsAt - ctx.State.GetServerUnixTime())
 		)
 		for index, row in rows do
@@ -179,40 +170,37 @@ function QuestsPanel.Create(content: Frame, ctx)
 				local glyph = row.Icon:FindFirstChild("Glyph") :: TextLabel
 				glyph.Text = ICONS[quest.Id] or "📜"
 				row.Title.Text = quest.Text
-				Widgets.SetPillText(row.Tier, TIER_NAMES[quest.Tier] or "")
 				-- Ruban : couleur de la difficulté ; tuile : couleur du type de quête
-				local tierColor = Theme.Vivid(TIER_COLORS[quest.Tier] or TIER_COLORS[1])
-				local tierGradient = row.Tier:FindFirstChildOfClass("UIGradient")
-				if tierGradient then
-					tierGradient.Color = ColorSequence.new(Theme.Lighten(tierColor, 0.2), Theme.Darken(tierColor, 0.18))
-				end
+				Widgets.SetPillText(row.Tier, TIER_NAMES[quest.Tier] or "")
+				Widgets.SetPillColor(row.Tier, TIER_COLORS[quest.Tier] or TIER_COLORS[1])
 				local iconColor = COLORS[quest.Id] or Theme.Info
 				local iconGradient = row.Icon:FindFirstChildOfClass("UIGradient")
 				if iconGradient then
-					iconGradient.Color =
-						ColorSequence.new(Theme.Lighten(iconColor, 0.32), Theme.Darken(iconColor, 0.15))
+					iconGradient.Color = ColorSequence.new(Theme.Lighten(iconColor, 0.3), iconColor)
 				end
 				row.Bar:SetProgress(quest.Progress / math.max(1, quest.Goal))
 				row.Bar:SetText(string.format("%d / %d", quest.Progress, quest.Goal))
 				row.Reward.Text = quest.RewardText
+				local ready = not quest.Claimed and quest.Progress >= quest.Goal
+				-- Quête à réclamer : carte dorée (récompense)
+				UIKit.SetCardTint(row.Card, if ready then Theme.Gold else nil)
 				if quest.Claimed then
-					row.Button:SetText("✅ RÉCLAMÉE")
-					row.Button:SetEnabled(false)
-				elseif quest.Progress >= quest.Goal then
-					row.Button:SetText("🎁 RÉCLAMER")
+					row.Button:SetStatus("✅ Réclamée")
+				elseif ready then
+					row.Button:SetText("🎁 Réclamer")
 					row.Button:SetEnabled(true)
 				else
-					row.Button:SetText("EN COURS...")
-					row.Button:SetEnabled(false)
+					row.Button:SetStatus("En cours...")
 				end
 			end
 		end
 		if quests.BonusClaimed then
-			bonusButton:SetText("✅ REÇU")
-			bonusButton:SetEnabled(false)
+			bonusButton:SetStatus("✅ Reçu")
+		elseif quests.AllClaimed then
+			bonusButton:SetText("🎁 Bonus")
+			bonusButton:SetEnabled(true)
 		else
-			bonusButton:SetText("🎁 BONUS")
-			bonusButton:SetEnabled(quests.AllClaimed == true)
+			bonusButton:SetStatus("🔒 Verrouillé")
 		end
 	end
 

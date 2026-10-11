@@ -34,6 +34,10 @@ local player = Players.LocalPlayer
 local uiRoot: Frame? = nil
 local State
 
+-- Vert des chiffres "+$" dans le monde (un peu plus clair que l'argent du HUD : lisible
+-- sur l'herbe comme sur le ciel, avec le contour encre)
+local MONEY_POP = Color3.fromRGB(110, 236, 110)
+
 local INCOME_POP_INTERVAL = 3
 local INCOME_POP_RANGE = 90
 local INCOME_POP_MAX = 14
@@ -66,7 +70,8 @@ local function popNumber(adornee: BasePart, text: string, color: Color3, height:
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
 	label.Size = UDim2.fromScale(1, 1)
-	label.Font = Theme.Font
+	-- Même police que les revenus des étiquettes de créatures (Luckiest Guy, majuscules)
+	label.Font = Theme.DisplayFont
 	label.TextSize = 30
 	label.TextColor3 = color
 	label.Text = Format.Upper(text)
@@ -131,7 +136,7 @@ local function incomeWave()
 		local amount = Economy.GetCreatureIncome(item.Entry) * multiplier * INCOME_POP_INTERVAL
 		local hip = item.Model:GetAttribute("HipHeight") or 2
 		-- Décalage aléatoire pour que les chiffres ne sortent pas tous en même temps
-		task.delay(math.random() * 0.6, popNumber, item.Root, "+" .. Format.Money(amount), Theme.Money, hip + 2.5)
+		task.delay(math.random() * 0.6, popNumber, item.Root, "+" .. Format.Money(amount), MONEY_POP, hip + 2.5)
 	end
 	if #candidates > 0 then
 		SoundController.Play("Coin", 0.15)
@@ -208,9 +213,11 @@ local function celebrate(color: Color3, text: string?)
 		}):Play()
 	end
 	if text and text ~= "" then
-		-- Gros texte penché aux couleurs de la rareté, contour noir épais (style « Steal a … »)
+		-- Gros texte penché aux couleurs de la rareté, contour encre épais (Luckiest Guy :
+		-- réservée aux célébrations et à l'argent du HUD)
 		local label = UIKit.Text({
 			Text = text,
+			Font = Theme.DisplayFont,
 			TextSize = 78,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			TextWrapped = false,
@@ -225,7 +232,7 @@ local function celebrate(color: Color3, text: string?)
 		})
 		-- Cadre ajusté au texte : un dégradé horizontal (arc-en-ciel) couvre tout le mot
 		local ok, bounds =
-			pcall(TextService.GetTextSize, TextService, label.Text, 78, Theme.Font, Vector2.new(4000, 200))
+			pcall(TextService.GetTextSize, TextService, label.Text, 78, Theme.DisplayFont, Vector2.new(4000, 200))
 		if ok and typeof(bounds) == "Vector2" then
 			label.Size = UDim2.fromOffset(math.min(980, math.ceil(bounds.X) + 28), 106)
 		end
@@ -307,93 +314,16 @@ local function showOfflinePopup(amount: number, seconds: number)
 		Name = "OfflineBackdrop",
 		Text = "",
 		AutoButtonColor = false,
-		BackgroundColor3 = Color3.fromRGB(4, 14, 44),
+		Selectable = false,
+		BackgroundColor3 = Theme.Ink,
 		BackgroundTransparency = 0.45,
 		Position = UDim2.fromOffset(-60, -120),
 		Size = UDim2.new(1, 120, 1, 240),
 		ZIndex = 59,
 		Parent = root,
 	})
-	local card = UIKit.New("Frame", {
-		Name = "OfflinePopup",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(540, 320),
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		ZIndex = 60,
-		Parent = root,
-	})
-	UIKit.Corner(card, 26)
-	UIKit.Stroke(card, 5)
-	UIKit.Gradient(card, Theme.PanelTop, Theme.PanelBottom)
-	local rim = UIKit.New("Frame", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(4, 4),
-		Size = UDim2.new(1, -8, 1, -8),
-		ZIndex = 60,
-		Parent = card,
-	})
-	UIKit.Corner(rim, 22)
-	UIKit.Stroke(rim, 2.5, Color3.new(1, 1, 1), 0.6)
-
-	-- Ruban de titre à cheval sur le bord haut
-	local ribbon = UIKit.Plate({
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0),
-		Size = UDim2.fromOffset(380, 74),
-		ZIndex = 62,
-		StrokeThickness = 4.5,
-		Parent = card,
-	}, "Gold", 6, 20)
-	UIKit.Text({
-		Text = "💤 BON RETOUR !",
-		TextSize = 36,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextWrapped = false,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, -24, 0, 44),
-		Stroke = 4,
-		Fit = true,
-		ZIndex = 64,
-		Parent = ribbon.Face,
-	})
-	UIKit.Body({
-		Text = "Pendant ton absence (" .. Format.Time(seconds) .. "), tes créatures ont travaillé :",
-		TextColor3 = Theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextSize = 19,
-		Position = UDim2.fromOffset(30, 54),
-		Size = UDim2.new(1, -60, 0, 48),
-		Stroke = 1.8,
-		ZIndex = 61,
-		Parent = card,
-	})
-	-- Gros montant vert dans un encart sombre
-	local amountBox = UIKit.New("Frame", {
-		BackgroundColor3 = Theme.Inset,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.fromOffset(270, 108),
-		Size = UDim2.fromOffset(400, 92),
-		ZIndex = 61,
-		Parent = card,
-	})
-	UIKit.Corner(amountBox, 18)
-	UIKit.Stroke(amountBox, 3.5)
-	local amountLabel = UIKit.Text({
-		Text = "+" .. Format.Money(amount),
-		TextSize = 64,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextWrapped = false,
-		Position = UDim2.fromOffset(10, 4),
-		Size = UDim2.new(1, -20, 1, -8),
-		Stroke = 5,
-		Fit = true,
-		ZIndex = 62,
-		Parent = amountBox,
-	})
-	UIKit.Gradient(amountLabel, Color3.fromRGB(210, 255, 200), Color3.fromRGB(70, 240, 80))
 	local collected = false
+	local popup
 	local function collect()
 		if collected then
 			return
@@ -401,22 +331,64 @@ local function showOfflinePopup(amount: number, seconds: number)
 		collected = true
 		celebrate(Theme.Money, nil)
 		backdrop:Destroy()
-		card:Destroy()
+		popup.Instance:Destroy()
 	end
+	-- Même fenêtre que les panneaux : corps blanc, en-tête violet, bouton fermer
+	popup = UIKit.Window({
+		Name = "OfflinePopup",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(520, 330),
+		ZIndex = 60,
+		Parent = root,
+	}, { Title = "Bon retour !", Icon = "💤", OnClose = collect })
+	local card = popup.Instance
+	UIKit.Body({
+		Text = "Pendant ton absence (" .. Format.Time(seconds) .. "), tes créatures ont travaillé :",
+		TextSize = 17,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Position = UDim2.fromOffset(32, 80),
+		Size = UDim2.new(1, -64, 0, 44),
+		ZIndex = 63,
+		Parent = card,
+	})
+	-- Gros montant (célébration : Luckiest Guy) dans une carte claire
+	local amountCard = UIKit.Card({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 128),
+		Size = UDim2.fromOffset(400, 92),
+		ZIndex = 63,
+		Parent = card,
+	}, Theme.Money, 0.6)
+	local amountLabel = UIKit.Text({
+		Text = "+" .. Format.Money(amount),
+		Font = Theme.DisplayFont,
+		TextSize = 60,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Position = UDim2.fromOffset(12, 10),
+		Size = UDim2.new(1, -24, 1, -16),
+		Stroke = 4,
+		Fit = true,
+		ZIndex = 64,
+		Parent = amountCard,
+	})
+	UIKit.Gradient(amountLabel, Color3.fromRGB(160, 248, 140), Theme.Money)
 	UIKit.Button({
-		Text = "💰 RÉCUPÉRER",
+		Text = "💰 Récupérer",
 		Color = "Green",
-		TextSize = 27,
+		TextSize = 24,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -20),
-		Size = UDim2.fromOffset(330, 78),
-		Radius = 16,
-		ZIndex = 62,
+		Position = UDim2.new(0.5, 0, 1, -22),
+		Size = UDim2.fromOffset(300, 58),
+		Radius = 14,
+		ZIndex = 63,
 		Parent = card,
 		OnClick = collect,
 	})
 	backdrop.Activated:Connect(collect)
-	UIKit.Pop(card, 0.5)
+	UIKit.Pop(card, 0.6)
 end
 
 ---------------------------------------------------------------------------

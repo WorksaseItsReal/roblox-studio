@@ -1,17 +1,21 @@
 --[[
 	UIKit
 	=====
-	Composants d'interface style « Steal a … », tous créés par code :
-	  Text        gros texte (Luckiest Guy) avec contour noir épais
-	  Body        texte courant (Fredoka One) avec contour noir fin
-	  Button      bouton 3D (dégradé vif, rebord inférieur foncé, contour noir, appui)
-	  IconButton  tuile carrée du menu (grosse icône + libellé)
-	  Card        carte claire (ou teintée d'une couleur vive) avec contour noir
-	  Pill        étiquette aux coins arrondis (rareté, statut...)
-	  IconCircle  rond coloré contenant une icône
-	  IconTile    carré arrondi coloré contenant une icône
-	  ProgressBar barre de progression brillante avec texte
+	Composants de l'interface v3 « propre » (jetons dans Theme), tous créés par code :
+	  Text        texte blanc à contour encre (sur un fond coloré ou sur le monde)
+	  Label       texte foncé sans contour (dans les fenêtres et les cartes)
+	  Body        texte secondaire gris-bleu (descriptions)
+	  Button      bouton d'action : dégradé léger, rebord inférieur plus foncé, contour encre
+	  IconButton  tuile blanche du HUD (gros emoji, libellé blanc à contour sous la tuile)
+	  Badge       pastille rouge « ! » dans le coin d'un bouton
+	  Plate       plaque 3D non cliquable (bandeaux)
+	  Card        carte claire à contour fin (teintée quand elle est mise en avant)
+	  Pill        pastille colorée (rareté, mutation, revenus)
+	  Chip        étiquette d'information neutre
+	  IconCircle / IconTile  rond / carré coloré contenant une icône
+	  ProgressBar jauge avec texte
 	  ScrollList / ScrollGrid
+	Règle d'or : une couleur = un sens (voir Theme).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -47,6 +51,15 @@ function UIKit.New(className: string, props: Props?, children: { Instance }?): a
 	return instance
 end
 
+-- Copie des propriétés sur une instance (sauf celles listées dans skip)
+local function assign(instance: Instance, props: Props?, skip: { [string]: boolean }?)
+	for key, value in pairs(props or {}) do
+		if key ~= "Parent" and not (skip and skip[key]) then
+			(instance :: any)[key] = value
+		end
+	end
+end
+
 ---------------------------------------------------------------------------
 -- Décorateurs
 ---------------------------------------------------------------------------
@@ -54,7 +67,7 @@ function UIKit.Corner(parent: Instance, radius: number | UDim | nil)
 	local value = if typeof(radius) == "UDim"
 		then radius
 		elseif type(radius) == "number" then UDim.new(0, radius)
-		else UDim.new(0, 14)
+		else UDim.new(0, 12)
 	return UIKit.New("UICorner", { CornerRadius = value, Parent = parent })
 end
 
@@ -62,11 +75,11 @@ function UIKit.Round(parent: Instance)
 	return UIKit.New("UICorner", { CornerRadius = UDim.new(0.5, 0), Parent = parent })
 end
 
--- Contour d'un cadre (noir pur par défaut)
+-- Contour d'un cadre (encre bleu nuit par défaut)
 function UIKit.Stroke(parent: Instance, thickness: number?, color: Color3?, transparency: number?)
 	return UIKit.New("UIStroke", {
 		Color = color or Theme.Ink,
-		Thickness = thickness or 3,
+		Thickness = thickness or 2.5,
 		Transparency = transparency or 0,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		LineJoinMode = Enum.LineJoinMode.Round,
@@ -74,11 +87,11 @@ function UIKit.Stroke(parent: Instance, thickness: number?, color: Color3?, tran
 	})
 end
 
--- Contour d'un texte
+-- Contour d'un texte (encre bleu nuit)
 function UIKit.TextStroke(label: Instance, thickness: number?, color: Color3?)
 	return UIKit.New("UIStroke", {
 		Color = color or Theme.Ink,
-		Thickness = thickness or 2,
+		Thickness = thickness or 1.5,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
 		LineJoinMode = Enum.LineJoinMode.Round,
 		Parent = label,
@@ -92,21 +105,6 @@ function UIKit.Gradient(parent: Instance, top: Color3, bottom: Color3, rotation:
 		Rotation = rotation or 90,
 		Parent = parent,
 	})
-end
-
--- Reflet brillant (bande blanche translucide en haut d'un élément)
-function UIKit.Shine(parent: GuiObject, radius: number?, transparency: number?, height: number?): Frame
-	local shine = UIKit.New("Frame", {
-		Name = "Shine",
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = transparency or 0.72,
-		Position = UDim2.fromOffset(5, 3),
-		Size = UDim2.new(1, -10, height or 0.32, 0),
-		ZIndex = parent.ZIndex,
-		Parent = parent,
-	})
-	UIKit.Corner(shine, math.max(2, (radius or 12) - 4))
-	return shine
 end
 
 function UIKit.Padding(parent: Instance, top: number, right: number?, bottom: number?, left: number?)
@@ -136,18 +134,46 @@ function UIKit.List(
 	})
 end
 
+--[[
+	Ombre portée douce : deux calques d'encre translucides décalés vers le bas. À placer
+	DERRIÈRE l'élément (même parent, ZIndex inférieur, même taille et position).
+]]
+function UIKit.Shadow(props: Props, radius: number?): Frame
+	local corner = radius or 20
+	local shadow = UIKit.New("Frame", {
+		Name = "Shadow",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+	})
+	assign(shadow, props)
+	for index, layer in { { Offset = 4, Grow = 0, Transparency = 0.78 }, { Offset = 9, Grow = 4, Transparency = 0.86 } } do
+		local frame = UIKit.New("Frame", {
+			Name = "Layer" .. index,
+			BackgroundColor3 = Theme.Ink,
+			BackgroundTransparency = layer.Transparency,
+			Position = UDim2.fromOffset(-layer.Grow / 2, layer.Offset),
+			Size = UDim2.new(1, layer.Grow, 1, 0),
+			ZIndex = shadow.ZIndex,
+			Parent = shadow,
+		})
+		UIKit.Corner(frame, corner + layer.Grow / 2)
+	end
+	shadow.Parent = props.Parent
+	return shadow
+end
+
 ---------------------------------------------------------------------------
 -- Texte
 ---------------------------------------------------------------------------
 --[[
-	Luckiest Guy dessine certaines minuscules (e, m, n...) autrement que les capitales :
-	un texte en casse mixte paraît cassé ("INDeX"). Tout texte dans cette police reste
-	donc en MAJUSCULES (accents compris), y compris quand il change plus tard
-	(minuteurs, SetText, messages du serveur). Les autres polices ne sont pas touchées.
+	Luckiest Guy (Theme.DisplayFont) dessine certaines minuscules autrement que les
+	capitales : un texte en casse mixte y paraît cassé. Tout texte dans CETTE police reste
+	donc en MAJUSCULES (accents compris), même quand il change plus tard. Fredoka One
+	(le reste de l'interface) garde la casse normale.
 ]]
 function UIKit.KeepUpper(label: TextLabel | TextBox)
 	local function apply()
-		if label.Font ~= Theme.Font then
+		if label.Font ~= Theme.DisplayFont then
 			return
 		end
 		local upper = Format.Upper(label.Text)
@@ -178,8 +204,9 @@ function UIKit.Fit(label: TextLabel, maxSize: number?, minSize: number?)
 end
 
 --[[
+	Texte blanc à contour encre : boutons, bandeaux colorés, HUD posé sur le monde.
 	Props additionnelles :
-	  Stroke : épaisseur du contour noir (0 = aucun)
+	  Stroke : épaisseur du contour (0 = aucun ; par défaut 1,5, 2 au-delà de 26 px)
 	  Fit    : true = le texte rétrécit s'il est trop long (TextSize = taille maximale)
 ]]
 function UIKit.Text(props: Props): TextLabel
@@ -188,40 +215,42 @@ function UIKit.Text(props: Props): TextLabel
 		BackgroundTransparency = 1,
 		Font = Theme.Font,
 		TextColor3 = Theme.Text,
-		TextSize = 20,
+		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Center,
 		TextWrapped = true,
 		Size = UDim2.new(1, 0, 0, 26),
 	})
-	for key, value in pairs(props) do
-		if key ~= "Stroke" and key ~= "Parent" and key ~= "Fit" then
-			(label :: any)[key] = value
-		end
-	end
+	assign(label, props, { Stroke = true, Fit = true })
 	if strokeThickness ~= 0 then
-		UIKit.TextStroke(label, strokeThickness or math.clamp(label.TextSize / 9, 1.5, 5))
+		local default = if label.Font == Theme.DisplayFont
+			then math.clamp(label.TextSize / 12, 2, 5)
+			elseif label.TextSize >= 26 then 2
+			else 1.5
+		UIKit.TextStroke(label, strokeThickness or default)
 	end
 	if props.Fit then
 		UIKit.Fit(label)
 	end
-	if label.Font == Theme.Font then
+	if label.Font == Theme.DisplayFont then
 		UIKit.KeepUpper(label)
 	end
 	label.Parent = props.Parent
 	return label
 end
 
--- Texte courant (descriptions) : Fredoka One, contour noir fin. 16 au minimum :
--- lisible sur téléphone, où l'interface est réduite d'environ 40 %.
+-- Texte foncé sans contour : titres et valeurs DANS les fenêtres
+function UIKit.Label(props: Props): TextLabel
+	local merged: Props = { TextColor3 = Theme.TextDark, Stroke = 0 }
+	for key, value in pairs(props) do
+		merged[key] = value
+	end
+	return UIKit.Text(merged)
+end
+
+-- Texte secondaire (descriptions) : gris-bleu, sans contour. 16 au minimum (téléphone).
 function UIKit.Body(props: Props): TextLabel
-	local size = props.TextSize or 16
-	local merged: Props = {
-		Font = Theme.BodyFont,
-		TextSize = size,
-		TextColor3 = Theme.TextDim,
-		Stroke = math.max(1, size / 12),
-	}
+	local merged: Props = { TextSize = 16, TextColor3 = Theme.TextMuted, Stroke = 0 }
 	for key, value in pairs(props) do
 		merged[key] = value
 	end
@@ -229,7 +258,7 @@ function UIKit.Body(props: Props): TextLabel
 end
 
 ---------------------------------------------------------------------------
--- Boutons 3D
+-- Boutons
 ---------------------------------------------------------------------------
 export type Button = {
 	Instance: Frame,
@@ -239,11 +268,11 @@ export type Button = {
 	SetText: (self: Button, text: string) -> (),
 	SetEnabled: (self: Button, enabled: boolean) -> (),
 	SetColor: (self: Button, palette: any) -> (),
+	SetStatus: (self: Button, text: string) -> (),
 }
 
-local DEPTH = 5
-
-local function resolvePalette(palette: any): { Color3 }
+-- Palette { haut, bas, rebord, Light? } (table libre : le champ Light est optionnel)
+local function resolvePalette(palette: any): any
 	if type(palette) == "table" then
 		return palette
 	end
@@ -251,46 +280,51 @@ local function resolvePalette(palette: any): { Color3 }
 end
 
 --[[
-	opts : Text, Color (clé de Theme.Palette ou {haut, bas}), Size, Position,
-	       AnchorPoint, LayoutOrder, TextSize, OnClick, Parent, ZIndex, Name,
-	       Radius (arrondi, 12 par défaut), Fit (false = pas de rétrécissement auto)
-	Structure : Instance (cadre) > Shadow (socle foncé + contour noir) + Face (dégradé)
+	opts : Text, Color (clé de Theme.Palette ou {haut, bas, rebord}), Size, Position,
+	       AnchorPoint, LayoutOrder, TextSize, OnClick, Parent, ZIndex, Name, Visible,
+	       Radius (arrondi : nombre ou UDim, 12 par défaut), Depth (rebord, 4),
+	       StrokeThickness (2,5), Fit (false = pas de rétrécissement automatique du texte)
+	Structure : Instance (cadre) > Lip (rebord foncé + contour encre) + Face (dégradé) > Label
+	Gris (Theme.Palette.Gray) = indisponible pour l'instant (redeviendra cliquable) ;
+	SetStatus(texte) = simple statut plat, non cliquable (« ✅ Reçu », « 🔒 2:20 »...) :
+	seules les actions possibles ressemblent à des boutons.
 ]]
 function UIKit.Button(opts: Props): Button
 	local palette = resolvePalette(opts.Color)
 	local radius = opts.Radius or 12
+	local depth = opts.Depth or Theme.LipDepth
 	local holder = UIKit.New("Frame", {
 		Name = opts.Name or "Button",
 		BackgroundTransparency = 1,
-		Size = opts.Size or UDim2.fromOffset(150, 50),
+		Size = opts.Size or UDim2.fromOffset(150, 48),
 		Position = opts.Position or UDim2.new(),
 		AnchorPoint = opts.AnchorPoint or Vector2.zero,
 		LayoutOrder = opts.LayoutOrder or 0,
 		ZIndex = opts.ZIndex or 1,
+		Visible = if opts.Visible == nil then true else opts.Visible,
 	})
-	-- Socle : rebord inférieur plus foncé, et UN SEUL contour noir autour du bouton
-	local shadow = UIKit.New("Frame", {
-		Name = "Shadow",
+	-- Rebord inférieur plus foncé, et UN SEUL contour encre autour de tout le bouton
+	local lip = UIKit.New("Frame", {
+		Name = "Lip",
 		BackgroundColor3 = Theme.Lip(palette),
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = holder.ZIndex,
 		Parent = holder,
 	})
-	UIKit.Corner(shadow, radius)
-	UIKit.Stroke(shadow, opts.StrokeThickness or 3.5)
+	UIKit.Corner(lip, radius)
+	local lipStroke = UIKit.Stroke(lip, opts.StrokeThickness or 2.5)
 
 	local face = UIKit.New("TextButton", {
 		Name = "Face",
 		Text = "",
 		AutoButtonColor = false,
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		Size = UDim2.new(1, 0, 1, -DEPTH),
+		Size = UDim2.new(1, 0, 1, -depth),
 		ZIndex = holder.ZIndex + 1,
 		Parent = holder,
 	})
 	UIKit.Corner(face, radius)
 	local gradient = UIKit.Gradient(face, palette[1], palette[2])
-	UIKit.Shine(face, radius, 0.74, 0.3)
 
 	local textSize = opts.TextSize or 20
 	local label = UIKit.Text({
@@ -302,11 +336,12 @@ function UIKit.Button(opts: Props): Button
 		-- Hauteur limitée à une ligne : un texte trop long rétrécit au lieu de passer à la ligne
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.new(1, -14, 0, math.ceil(textSize * 1.3)),
-		Stroke = math.clamp(textSize / 8, 1.8, 3.5),
+		Size = UDim2.new(1, -16, 0, math.ceil(textSize * 1.25)),
+		Stroke = 1.5,
 		ZIndex = face.ZIndex + 1,
 		Parent = face,
 	})
+	local labelStroke = label:FindFirstChildOfClass("UIStroke")
 	if opts.Fit ~= false then
 		UIKit.Fit(label, textSize)
 	end
@@ -320,6 +355,21 @@ function UIKit.Button(opts: Props): Button
 		Enabled = true,
 	}
 
+	-- Couleurs d'un état : bouton clair = texte foncé sans contour ; bouton indisponible
+	-- (gris) = contour du texte adouci, pour qu'il ne paraisse pas cliquable
+	local function paint(colors: any)
+		gradient.Color = ColorSequence.new(colors[1], colors[2])
+		lip.BackgroundColor3 = Theme.Lip(colors)
+		lipStroke.Enabled = colors.Flat ~= true
+		local light = colors.Light == true
+		label.TextColor3 = if colors.Flat then Theme.TextMuted elseif light then Theme.TextDark else Theme.Text
+		if labelStroke then
+			labelStroke.Enabled = not light
+			labelStroke.Transparency = if colors == Theme.Palette.Gray then 0.45 else 0
+		end
+	end
+	paint(palette)
+
 	function button.SetText(_self, text: string)
 		label.Text = text
 	end
@@ -327,22 +377,24 @@ function UIKit.Button(opts: Props): Button
 	function button.SetColor(_self, newPalette)
 		palette = resolvePalette(newPalette)
 		if button.Enabled then
-			gradient.Color = ColorSequence.new(palette[1], palette[2])
-			shadow.BackgroundColor3 = Theme.Lip(palette)
+			paint(palette)
 		end
 	end
 
 	function button.SetEnabled(_self, enabled: boolean)
 		button.Enabled = enabled
-		local colors = if enabled then palette else Theme.Palette.Gray
-		gradient.Color = ColorSequence.new(colors[1], colors[2])
-		shadow.BackgroundColor3 = Theme.Lip(colors)
-		label.TextColor3 = if enabled then Theme.Text else Color3.fromRGB(236, 240, 248)
+		paint(if enabled then palette else Theme.Palette.Gray)
+	end
+
+	function button.SetStatus(_self, text: string)
+		button.Enabled = false
+		label.Text = text
+		paint(Theme.Palette.Status)
 	end
 
 	face.MouseEnter:Connect(function()
 		if button.Enabled then
-			TweenService:Create(scale, TweenInfo.new(0.12), { Scale = 1.05 }):Play()
+			TweenService:Create(scale, TweenInfo.new(0.12), { Scale = 1.04 }):Play()
 		end
 	end)
 	face.MouseLeave:Connect(function()
@@ -351,8 +403,8 @@ function UIKit.Button(opts: Props): Button
 	end)
 	face.MouseButton1Down:Connect(function()
 		if button.Enabled then
-			-- Le dessus s'enfonce dans son socle
-			face.Position = UDim2.fromOffset(0, DEPTH - 2)
+			-- Le dessus s'enfonce dans son rebord
+			face.Position = UDim2.fromOffset(0, depth - 1)
 		end
 	end)
 	face.MouseButton1Up:Connect(function()
@@ -363,7 +415,7 @@ function UIKit.Button(opts: Props): Button
 		if not button.Enabled then
 			return
 		end
-		scale.Scale = 0.94
+		scale.Scale = 0.95
 		TweenService:Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back), { Scale = 1 }):Play()
 		if UIKit.OnClick then
 			UIKit.OnClick()
@@ -377,6 +429,139 @@ function UIKit.Button(opts: Props): Button
 	return (button :: any) :: Button
 end
 
+export type Window = {
+	Instance: TextButton,
+	Body: Frame,
+	Header: Frame,
+	Icon: TextLabel,
+	Title: TextLabel,
+	Close: Button?,
+}
+
+-- Hauteur de l'en-tête violet des fenêtres
+UIKit.HeaderHeight = 64
+
+--[[
+	Fenêtre : corps blanc à contour encre, en-tête violet de marque (icône + titre),
+	bouton fermer rond rouge, ombre portée douce.
+	Le cadre extérieur est un bouton SANS texte ni effet : il absorbe les clics (un Frame
+	les laisse passer jusqu'au fond, et un tap sur une zone vide fermait la fenêtre).
+	props : propriétés du cadre (Size, Position, AnchorPoint, ZIndex, Visible, Name...)
+	opts  : Title, Icon, OnClose (nil = pas de bouton fermer)
+	Le contenu se place dans Instance, avec un ZIndex >= ZIndex de la fenêtre + 2.
+]]
+function UIKit.Window(props: Props, opts: Props): Window
+	local window = UIKit.New("TextButton", {
+		Name = "Window",
+		Text = "",
+		AutoButtonColor = false,
+		Selectable = false,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(760, 520),
+	})
+	assign(window, props)
+	local z = window.ZIndex
+	UIKit.Shadow({ ZIndex = z, Parent = window }, 22)
+	local body = UIKit.New("Frame", {
+		Name = "Body",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = z + 1,
+		Parent = window,
+	})
+	UIKit.Corner(body, 20)
+	UIKit.Stroke(body, 3)
+	UIKit.Gradient(body, Theme.WindowTop, Theme.WindowBottom)
+
+	-- En-tête : coins arrondis en haut seulement (un remplissage carré couvre le bas),
+	-- rebord plus foncé en bas (même relief que les boutons)
+	local height = UIKit.HeaderHeight
+	local header = UIKit.New("Frame", {
+		Name = "Header",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Size = UDim2.new(1, 0, 0, height),
+		ZIndex = z + 2,
+		Parent = window,
+	})
+	UIKit.Corner(header, 20)
+	UIKit.Gradient(header, Theme.Brand, Theme.Brand:Lerp(Theme.BrandDark, 0.6))
+	local fill = UIKit.New("Frame", {
+		Name = "Fill",
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 0, 1, -24),
+		Size = UDim2.new(1, 0, 0, 24),
+		ZIndex = z + 2,
+		Parent = header,
+	})
+	UIKit.Gradient(fill, Theme.Brand:Lerp(Theme.BrandDark, 0.38), Theme.Brand:Lerp(Theme.BrandDark, 0.6))
+	UIKit.New("Frame", {
+		Name = "Lip",
+		BackgroundColor3 = Theme.Darken(Theme.BrandDark, 0.18),
+		BorderSizePixel = 0,
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.new(1, 0, 0, 4),
+		ZIndex = z + 3,
+		Parent = header,
+	})
+	local icon = UIKit.Text({
+		Name = "Icon",
+		Text = opts.Icon or "⭐",
+		TextSize = 30,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 16, 0.5, -2),
+		Size = UDim2.fromOffset(40, 40),
+		Stroke = 0,
+		ZIndex = z + 3,
+		Parent = header,
+	})
+	local title = UIKit.Text({
+		Name = "Title",
+		Text = opts.Title or "",
+		TextSize = 30,
+		TextWrapped = false,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 64, 0.5, -2),
+		Size = UDim2.new(1, -140, 0, 40),
+		Stroke = 2,
+		Fit = true,
+		ZIndex = z + 3,
+		Parent = header,
+	})
+
+	local close = nil
+	if opts.OnClose then
+		close = UIKit.Button({
+			Name = "Close",
+			Text = "X",
+			Color = "Red",
+			TextSize = 24,
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, 10),
+			Size = UDim2.fromOffset(44, 44),
+			Radius = UDim.new(0.5, 0),
+			Fit = false,
+			ZIndex = z + 4,
+			OnClick = opts.OnClose,
+			Parent = window,
+		})
+		close.Label.Position = UDim2.new(0.5, 0, 0.5, 1)
+	end
+
+	window.Parent = props.Parent
+	return {
+		Instance = window,
+		Body = body,
+		Header = header,
+		Icon = icon,
+		Title = title,
+		Close = close,
+	}
+end
+
 export type Plate = {
 	Instance: Frame,
 	Face: Frame,
@@ -384,33 +569,30 @@ export type Plate = {
 }
 
 --[[
-	Plaque 3D non cliquable (bandeaux, cartes du HUD, fenêtres surgissantes) :
-	même relief que les boutons. Le contenu se place dans Face.
+	Plaque 3D non cliquable (bandeaux du HUD) : même relief que les boutons.
+	Le contenu se place dans Face.
 	props : propriétés du cadre extérieur (Size, Position, AnchorPoint, ZIndex, Name...)
+	        + StrokeThickness
 ]]
 function UIKit.Plate(props: Props, palette: any, depth: number?, radius: number?): Plate
 	local colors = resolvePalette(palette)
-	local lipDepth = depth or DEPTH
+	local lipDepth = depth or 5
 	local corner = radius or 16
 	local holder = UIKit.New("Frame", {
 		Name = "Plate",
 		BackgroundTransparency = 1,
 		Size = UDim2.fromOffset(300, 80),
 	})
-	for key, value in pairs(props) do
-		if key ~= "Parent" and key ~= "StrokeThickness" then
-			(holder :: any)[key] = value
-		end
-	end
-	local shadow = UIKit.New("Frame", {
-		Name = "Shadow",
+	assign(holder, props, { StrokeThickness = true })
+	local lip = UIKit.New("Frame", {
+		Name = "Lip",
 		BackgroundColor3 = Theme.Lip(colors),
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = holder.ZIndex,
 		Parent = holder,
 	})
-	UIKit.Corner(shadow, corner)
-	UIKit.Stroke(shadow, props.StrokeThickness or 4)
+	UIKit.Corner(lip, corner)
+	UIKit.Stroke(lip, props.StrokeThickness or 3)
 	local face = UIKit.New("Frame", {
 		Name = "Face",
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -420,37 +602,41 @@ function UIKit.Plate(props: Props, palette: any, depth: number?, radius: number?
 	})
 	UIKit.Corner(face, corner)
 	local gradient = UIKit.Gradient(face, colors[1], colors[2])
-	UIKit.Shine(face, corner, 0.78, 0.3)
 
 	local plate = { Instance = holder, Face = face }
 	function plate.SetColor(_self, newPalette)
 		local newColors = resolvePalette(newPalette)
 		gradient.Color = ColorSequence.new(newColors[1], newColors[2])
-		shadow.BackgroundColor3 = Theme.Lip(newColors)
+		lip.BackgroundColor3 = Theme.Lip(newColors)
 	end
 	holder.Parent = props.Parent
 	return (plate :: any) :: Plate
 end
 
--- Tuile carrée du menu : grosse icône + libellé en bas (style « Steal a … »)
+--[[
+	Tuile du HUD : carré blanc à contour encre et rebord gris, gros emoji au centre,
+	libellé blanc à contour encre à cheval sur le bas de la tuile. Toutes les tuiles
+	sont identiques (seuls l'emoji et le libellé changent).
+	opts : Name, Icon, Text, Size, IconSize, CaptionSize, LayoutOrder, OnClick, Parent
+]]
 function UIKit.IconButton(opts: Props): Button
 	local button = UIKit.Button({
 		Name = opts.Name,
-		Color = opts.Color,
-		Size = opts.Size or UDim2.fromOffset(78, 78),
+		Color = "White",
+		Size = opts.Size or UDim2.fromOffset(72, 72),
 		LayoutOrder = opts.LayoutOrder,
 		OnClick = opts.OnClick,
 		Parent = opts.Parent,
 		Text = "",
-		Radius = 14,
+		Radius = 16,
+		Depth = 5,
+		StrokeThickness = 3,
 		Fit = false,
 	})
 	local icon = button.Label
 	icon.Text = opts.Icon or ""
 	icon.TextSize = opts.IconSize or 34
-	icon.AnchorPoint = Vector2.new(0.5, 0)
-	icon.Position = UDim2.new(0.5, 0, 0, 5)
-	icon.Size = UDim2.new(1, 0, 0.6, 0)
+	icon.Size = UDim2.new(1, 0, 1, -6)
 	-- Pas de contour sur un emoji
 	local iconStroke = icon:FindFirstChildOfClass("UIStroke")
 	if iconStroke then
@@ -459,125 +645,129 @@ function UIKit.IconButton(opts: Props): Button
 	UIKit.Text({
 		Name = "Caption",
 		Text = opts.Text or "",
-		TextSize = opts.CaptionSize or 16,
+		TextSize = opts.CaptionSize or 14,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -4),
-		Size = UDim2.new(1, -6, 0, 20),
-		Stroke = 2,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 1, 1),
+		Size = UDim2.new(1, 18, 0, 18),
+		Stroke = 1.75,
 		Fit = true,
-		ZIndex = icon.ZIndex,
-		Parent = button.Face,
+		ZIndex = button.Face.ZIndex + 2,
+		Parent = button.Instance,
 	})
 	return button
 end
 
--- Pastille rouge "!" (ou un texte court) dans le coin d'un bouton : attire l'œil
+-- Pastille rouge « ! » (ou un texte court) dans le coin d'un bouton : attire l'œil
 -- vers ce qui est à réclamer. Invisible par défaut.
 function UIKit.Badge(button: Button, text: string?): Frame
 	local badge = UIKit.New("Frame", {
 		Name = "Badge",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(1, -6, 0, 5),
-		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(1, -5, 0, 5),
+		Size = UDim2.fromOffset(24, 24),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		Visible = false,
 		ZIndex = button.Face.ZIndex + 5,
 		Parent = button.Instance,
 	})
 	UIKit.Round(badge)
-	UIKit.Stroke(badge, 3)
-	UIKit.Gradient(badge, Color3.fromRGB(255, 100, 100), Color3.fromRGB(214, 16, 36))
+	UIKit.Stroke(badge, 2.5)
+	UIKit.Gradient(badge, Theme.Lighten(Theme.Danger, 0.12), Theme.Darken(Theme.Danger, 0.06))
 	UIKit.Text({
 		Name = "Text",
 		Text = text or "!",
-		TextSize = 17,
+		TextSize = 16,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
 		Size = UDim2.fromScale(1, 1),
-		Stroke = 2,
+		Stroke = 1.5,
 		ZIndex = badge.ZIndex + 1,
 		Parent = badge,
 	})
 	return badge
 end
 
--- Champ de saisie : fond blanc, gros texte, contour noir
+-- Champ de saisie : fond clair, texte foncé, contour violet de marque quand il est actif
 function UIKit.Input(props: Props): TextBox
 	local box = UIKit.New("TextBox", {
-		BackgroundColor3 = Color3.new(1, 1, 1),
+		BackgroundColor3 = Theme.Card,
 		Font = Theme.Font,
-		TextSize = 24,
+		TextSize = 22,
 		TextColor3 = Theme.TextDark,
-		PlaceholderColor3 = Color3.fromRGB(128, 150, 196),
+		PlaceholderColor3 = Theme.TextMuted,
 		ClearTextOnFocus = false,
 		Text = "",
-		Size = UDim2.new(1, 0, 0, 56),
+		Size = UDim2.new(1, 0, 0, 52),
 	})
-	for key, value in pairs(props) do
-		if key ~= "Parent" then
-			(box :: any)[key] = value
-		end
-	end
-	UIKit.Corner(box, 14)
-	UIKit.Stroke(box, 3.5)
-	UIKit.Gradient(box, Color3.fromRGB(255, 255, 255), Color3.fromRGB(214, 230, 255))
+	assign(box, props)
+	UIKit.Corner(box, 12)
+	local stroke = UIKit.Stroke(box, 2.5, Theme.CardStroke)
 	UIKit.Padding(box, 0, 16, 0, 16)
-	-- Saisie en majuscules (les codes sont normalisés en majuscules par le serveur)
-	UIKit.KeepUpper(box)
+	box.Focused:Connect(function()
+		stroke.Color = Theme.Brand
+	end)
+	box.FocusLost:Connect(function()
+		stroke.Color = Theme.CardStroke
+	end)
 	box.Parent = props.Parent
 	return box
 end
 
 ---------------------------------------------------------------------------
--- Cartes, étiquettes, icônes, barres
+-- Cartes, étiquettes, icônes, jauges
 ---------------------------------------------------------------------------
 --[[
-	Carte claire avec contour noir. "tint" donne à la carte une couleur vive (rareté,
-	récompense...) ; tintAmount (0 à 1, 1 par défaut) dose le mélange avec le bleu clair.
+	Met une carte en avant (fond très clair teinté + contour de la couleur), ou la
+	remet au neutre (tint = nil). amount (0 à 1) dose la teinte du fond.
 ]]
-function UIKit.Card(props: Props, tint: Color3?, tintAmount: number?): Frame
-	local card = UIKit.New("Frame", {
-		BackgroundColor3 = Color3.new(1, 1, 1),
-		Size = UDim2.new(1, 0, 0, 80),
-	})
-	for key, value in pairs(props) do
-		if key ~= "Parent" then
-			(card :: any)[key] = value
+function UIKit.SetCardTint(card: Frame, tint: Color3?, amount: number?)
+	local stroke = card:FindFirstChildOfClass("UIStroke")
+	if tint then
+		card.BackgroundColor3 = Theme.Tint(tint, 0.14 * (amount or 1))
+		if stroke then
+			stroke.Color = tint
+			stroke.Thickness = 2.5
+		end
+	else
+		card.BackgroundColor3 = Theme.Card
+		if stroke then
+			stroke.Color = Theme.CardStroke
+			stroke.Thickness = 2
 		end
 	end
+end
+
+-- Carte claire à contour fin ; "tint" la met en avant (voir SetCardTint)
+function UIKit.Card(props: Props, tint: Color3?, tintAmount: number?): Frame
+	local card = UIKit.New("Frame", {
+		BackgroundColor3 = Theme.Card,
+		Size = UDim2.new(1, 0, 0, 80),
+	})
+	assign(card, props)
 	UIKit.Corner(card, 14)
-	UIKit.Stroke(card, 3)
-	local top, bottom = Theme.CardTop, Theme.CardBottom
+	UIKit.Stroke(card, 2, Theme.CardStroke)
 	if tint then
-		local amount = tintAmount or 1
-		top = top:Lerp(Theme.Lighten(tint, 0.28), amount)
-		bottom = bottom:Lerp(Theme.Darken(tint, 0.12), amount)
+		UIKit.SetCardTint(card, tint, tintAmount)
 	end
-	UIKit.Gradient(card, top, bottom)
 	card.Parent = props.Parent
 	return card
 end
 
--- Cadre creusé (bleu nuit) pour regrouper du contenu
+-- Zone creusée claire (regroupe du contenu sans contour)
 function UIKit.Inset(props: Props): Frame
 	local inset = UIKit.New("Frame", {
-		BackgroundColor3 = Theme.Inset,
-		BackgroundTransparency = 0.15,
+		BackgroundColor3 = Theme.Well,
 		Size = UDim2.fromScale(1, 1),
 	})
-	for key, value in pairs(props) do
-		if key ~= "Parent" then
-			(inset :: any)[key] = value
-		end
-	end
-	UIKit.Corner(inset, 14)
+	assign(inset, props)
+	UIKit.Corner(inset, 12)
 	inset.Parent = props.Parent
 	return inset
 end
 
--- Étiquette colorée à largeur automatique (coins arrondis moyens, contour noir)
+-- Pastille colorée à largeur automatique : fond de la couleur, texte blanc à contour encre
 function UIKit.Pill(text: string, color: Color3, props: Props?): Frame
 	local pill = UIKit.New("Frame", {
 		Name = "Pill",
@@ -585,27 +775,21 @@ function UIKit.Pill(text: string, color: Color3, props: Props?): Frame
 		Size = UDim2.fromOffset(0, 26),
 		AutomaticSize = Enum.AutomaticSize.X,
 	})
-	for key, value in pairs(props or {}) do
-		if key ~= "Parent" and key ~= "TextSize" then
-			(pill :: any)[key] = value
-		end
-	end
+	assign(pill, props, { TextSize = true })
 	UIKit.Corner(pill, 8)
-	UIKit.Stroke(pill, 2.5)
-	-- Couleur franche (une mutation pastel devient vive), les gris restent gris
-	local vivid = Theme.Vivid(color)
-	UIKit.Gradient(pill, Theme.Lighten(vivid, 0.2), Theme.Darken(vivid, 0.18))
-	UIKit.Padding(pill, 0, 10, 0, 10)
-	local textSize = (props and props.TextSize) or 15
+	UIKit.Stroke(pill, 2)
+	UIKit.Gradient(pill, Theme.Lighten(color, 0.14), color)
+	UIKit.Padding(pill, 0, 9, 0, 9)
 	UIKit.Text({
 		Name = "Text",
 		Text = text,
-		TextSize = textSize,
+		TextSize = (props and props.TextSize) or 15,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.fromScale(0, 1),
-		Stroke = math.clamp(textSize / 8, 1.6, 2.6),
+		Stroke = 1.5,
+		ZIndex = pill.ZIndex,
 		Parent = pill,
 	})
 	if props and props.Parent then
@@ -614,24 +798,48 @@ function UIKit.Pill(text: string, color: Color3, props: Props?): Frame
 	return pill
 end
 
+-- Étiquette d'information neutre (fond gris-bleu clair, texte foncé), largeur automatique
+function UIKit.Chip(text: string, props: Props?): Frame
+	local chip = UIKit.New("Frame", {
+		Name = "Chip",
+		BackgroundColor3 = Theme.Chip,
+		Size = UDim2.fromOffset(0, 36),
+		AutomaticSize = Enum.AutomaticSize.X,
+	})
+	assign(chip, props, { TextSize = true })
+	UIKit.Corner(chip, 10)
+	UIKit.Padding(chip, 0, 12, 0, 12)
+	UIKit.Label({
+		Name = "Text",
+		Text = text,
+		TextSize = (props and props.TextSize) or 17,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromScale(0, 1),
+		ZIndex = chip.ZIndex,
+		Parent = chip,
+	})
+	if props and props.Parent then
+		chip.Parent = props.Parent
+	end
+	return chip
+end
+
 local function iconHolder(shape: "Circle" | "Tile", icon: string, color: Color3, size: number, props: Props?): Frame
 	local holder = UIKit.New("Frame", {
 		Name = "Icon",
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		Size = UDim2.fromOffset(size, size),
 	})
-	for key, value in pairs(props or {}) do
-		if key ~= "Parent" then
-			(holder :: any)[key] = value
-		end
-	end
+	assign(holder, props)
 	if shape == "Circle" then
 		UIKit.Round(holder)
 	else
-		UIKit.Corner(holder, math.floor(size * 0.2))
+		UIKit.Corner(holder, math.floor(size * 0.24))
 	end
-	UIKit.Stroke(holder, if size >= 60 then 3.5 else 3)
-	UIKit.Gradient(holder, Theme.Lighten(color, 0.32), Theme.Darken(color, 0.15))
+	UIKit.Stroke(holder, if size >= 64 then 3 else 2.5)
+	UIKit.Gradient(holder, Theme.Lighten(color, 0.3), color)
 	UIKit.Text({
 		Name = "Glyph",
 		Text = icon,
@@ -666,19 +874,17 @@ export type ProgressBar = {
 	SetColor: (self: ProgressBar, color: Color3) -> (),
 }
 
+-- Jauge : fond creusé, remplissage de la couleur du sens, texte blanc à contour
 function UIKit.ProgressBar(props: Props, color: Color3): ProgressBar
 	local back = UIKit.New("Frame", {
 		Name = "ProgressBar",
-		BackgroundColor3 = Theme.Inset,
+		BackgroundColor3 = Theme.Well,
 		Size = UDim2.new(1, 0, 0, 28),
 	})
-	for key, value in pairs(props) do
-		if key ~= "Parent" then
-			(back :: any)[key] = value
-		end
-	end
-	UIKit.Corner(back, 9)
-	UIKit.Stroke(back, 3)
+	assign(back, props)
+	local radius = math.floor(math.min(10, back.Size.Y.Offset / 2))
+	UIKit.Corner(back, radius)
+	UIKit.Stroke(back, 2)
 	local fill = UIKit.New("Frame", {
 		Name = "Fill",
 		BackgroundColor3 = Color3.new(1, 1, 1),
@@ -686,22 +892,21 @@ function UIKit.ProgressBar(props: Props, color: Color3): ProgressBar
 		ZIndex = back.ZIndex + 1,
 		Parent = back,
 	})
-	UIKit.Corner(fill, 9)
-	local gradient = UIKit.Gradient(fill, Theme.Lighten(color, 0.3), Theme.Darken(color, 0.12))
-	UIKit.Shine(fill, 9, 0.6, 0.34)
+	UIKit.Corner(fill, radius)
+	local gradient = UIKit.Gradient(fill, Theme.Lighten(color, 0.16), color)
 	local label = UIKit.Text({
 		Name = "Label",
 		Text = "",
-		TextSize = 16,
+		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextWrapped = false,
 		Size = UDim2.new(1, -12, 1, 0),
 		Position = UDim2.fromOffset(6, 0),
-		Stroke = 2,
+		Stroke = 1.5,
 		ZIndex = back.ZIndex + 2,
 		Parent = back,
 	})
-	UIKit.Fit(label, 16)
+	UIKit.Fit(label, 15)
 	back.Parent = props.Parent
 
 	local bar = { Instance = back, Label = label }
@@ -713,7 +918,7 @@ function UIKit.ProgressBar(props: Props, color: Color3): ProgressBar
 		label.Text = text
 	end
 	function bar.SetColor(_self, newColor: Color3)
-		gradient.Color = ColorSequence.new(Theme.Lighten(newColor, 0.3), Theme.Darken(newColor, 0.12))
+		gradient.Color = ColorSequence.new(Theme.Lighten(newColor, 0.16), newColor)
 	end
 	return (bar :: any) :: ProgressBar
 end
@@ -729,21 +934,35 @@ local function scrollFrame(parent: Instance, props: Props?): ScrollingFrame
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
-		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = Theme.Inset,
-		ScrollBarImageTransparency = 0.1,
+		ScrollBarThickness = 6,
+		ScrollBarImageColor3 = Color3.fromRGB(176, 185, 205),
+		ScrollBarImageTransparency = 0,
 		Parent = parent,
 	})
-	for key, value in pairs(props or {}) do
-		(scroll :: any)[key] = value
-	end
+	assign(scroll, props)
 	return scroll
+end
+
+-- Marges intérieures des listes : de quoi ne pas couper les contours (et les pulsations)
+local SCROLL_PADDING = { 5, 14, 10, 5 }
+
+--[[
+	Position et taille d'une zone défilante qui commence à "top" dans le contenu d'une
+	fenêtre : les cartes s'alignent exactement sur les bords du contenu (marges
+	intérieures comprises) et la barre de défilement tombe dans la marge de droite.
+]]
+function UIKit.ScrollArea(top: number): Props
+	local outerTop = top - SCROLL_PADDING[1]
+	return {
+		Position = UDim2.fromOffset(-SCROLL_PADDING[4], outerTop),
+		Size = UDim2.new(1, SCROLL_PADDING[2] + SCROLL_PADDING[4], 1, SCROLL_PADDING[3] - outerTop),
+	}
 end
 
 function UIKit.ScrollList(parent: Instance, props: Props?): ScrollingFrame
 	local scroll = scrollFrame(parent, props)
 	UIKit.List(scroll, Enum.FillDirection.Vertical, 10)
-	UIKit.Padding(scroll, 6, 16, 10, 6)
+	UIKit.Padding(scroll, table.unpack(SCROLL_PADDING))
 	return scroll
 end
 
@@ -755,7 +974,7 @@ function UIKit.ScrollGrid(parent: Instance, cellSize: UDim2, props: Props?): Scr
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Parent = scroll,
 	})
-	UIKit.Padding(scroll, 6, 16, 10, 6)
+	UIKit.Padding(scroll, table.unpack(SCROLL_PADDING))
 	return scroll
 end
 
@@ -790,8 +1009,8 @@ function UIKit.Pulse(target: GuiObject, enabled: boolean, amount: number?)
 	end
 	local tween = TweenService:Create(
 		scale,
-		TweenInfo.new(0.55, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-		{ Scale = 1 + (amount or 0.05) }
+		TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+		{ Scale = 1 + (amount or 0.04) }
 	)
 	pulses[target] = tween
 	tween:Play()

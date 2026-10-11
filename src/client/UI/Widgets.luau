@@ -1,26 +1,26 @@
 --[[
 	Widgets
 	=======
-	Petits assemblages réutilisés par plusieurs panneaux.
+	Petits assemblages réutilisés par plusieurs panneaux (style v3 : cartes claires,
+	texte foncé, raretés en pastilles colorées).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Rarities = require(ReplicatedStorage.Shared.Config.Rarities)
-local Format = require(ReplicatedStorage.Shared.Modules.Format)
 local Theme = require(script.Parent.Theme)
 local UIKit = require(script.Parent.UIKit)
 
 local Widgets = {}
 
--- Dégradé arc-en-ciel (rareté Secrète)
+-- Dégradé arc-en-ciel (rareté Secrète), de gauche à droite
 Widgets.Rainbow = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 70, 70)),
-	ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 190, 40)),
-	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(90, 240, 90)),
-	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(40, 200, 255)),
-	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(160, 90, 255)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 200)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 64, 64)),
+	ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 190, 30)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(80, 220, 80)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(30, 190, 255)),
+	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(150, 80, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 70, 200)),
 })
 
 --[[
@@ -45,64 +45,61 @@ end
 
 function Widgets.RarityColor(rarityId: string): Color3
 	local rarity = Rarities.Get(rarityId)
-	return if rarity then rarity.Color else Theme.Text
+	return if rarity then rarity.Color else Theme.TextMuted
 end
 
--- Nom de la rareté en gros texte coloré, contour noir (arc-en-ciel pour Secret)
-function Widgets.RarityText(rarityId: string, props: { [string]: any }): TextLabel
+function Widgets.RarityName(rarityId: string): string
 	local rarity = Rarities.Get(rarityId)
-	local merged: { [string]: any } = {
-		Name = "Rarity",
-		Text = Format.Upper(if rarity then rarity.Name else rarityId),
-		TextSize = 16,
-		TextColor3 = if rarity then rarity.Color else Theme.Text,
-		TextWrapped = false,
-		Stroke = 2.2,
-	}
-	for key, value in pairs(props) do
-		merged[key] = value
+	return if rarity then rarity.Name else rarityId
+end
+
+-- Remplace le dégradé d'une pastille ou d'une tuile par l'arc-en-ciel (Secrète)
+local function rainbow(frame: Frame, rotation: number)
+	local gradient = frame:FindFirstChildOfClass("UIGradient")
+	if gradient then
+		gradient.Color = Widgets.Rainbow
+		gradient.Rotation = rotation
 	end
-	if rarityId == "Secret" then
-		merged.TextColor3 = Color3.new(1, 1, 1)
-	end
-	local label = UIKit.Text(merged)
-	if rarityId == "Secret" then
-		UIKit.New("UIGradient", { Color = Widgets.Rainbow, Parent = label })
-	end
-	return label
 end
 
 --[[
-	Rareté sur un encart bleu nuit à largeur automatique : chaque couleur de rareté
-	(gris, bleu, violet, or, rouge, arc-en-ciel) ressort, quelle que soit la carte.
+	Rareté en pastille colorée (arc-en-ciel pour Secret) : texte blanc à contour encre.
 	props : propriétés du cadre (Position, AnchorPoint, LayoutOrder, Parent...) + TextSize
 ]]
 function Widgets.RarityTag(rarityId: string, props: { [string]: any }): Frame
-	local textSize = props.TextSize or 16
-	local tag = UIKit.New("Frame", {
-		Name = "RarityTag",
-		BackgroundColor3 = Theme.Inset,
-		Size = UDim2.fromOffset(0, textSize + 8),
-		AutomaticSize = Enum.AutomaticSize.X,
-	})
+	local textSize = props.TextSize or 14
+	local merged: { [string]: any } = { Name = "RarityTag", Size = UDim2.fromOffset(0, textSize + 9) }
 	for key, value in pairs(props) do
-		if key ~= "Parent" and key ~= "TextSize" then
-			(tag :: any)[key] = value
-		end
+		merged[key] = value
 	end
-	UIKit.Corner(tag, 7)
-	UIKit.Stroke(tag, 2)
-	UIKit.Padding(tag, 0, 8, 0, 8)
-	Widgets.RarityText(rarityId, {
-		TextSize = textSize,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		AutomaticSize = Enum.AutomaticSize.X,
-		Size = UDim2.fromScale(0, 1),
-		Stroke = math.clamp(textSize / 7, 1.8, 2.6),
-		ZIndex = tag.ZIndex,
-		Parent = tag,
-	})
-	tag.Parent = props.Parent
+	merged.TextSize = textSize
+	local tag = UIKit.Pill(Widgets.RarityName(rarityId), Widgets.RarityColor(rarityId), merged)
+	if rarityId == "Secret" then
+		rainbow(tag, 0)
+	end
+	return tag
+end
+
+-- Mutation en pastille (dégradé propre à la mutation s'il existe : Prismatique...)
+function Widgets.MutationTag(mutation: any, props: { [string]: any }): Frame
+	local textSize = props.TextSize or 14
+	local merged: { [string]: any } = { Name = "MutationTag", Size = UDim2.fromOffset(0, textSize + 9) }
+	for key, value in pairs(props) do
+		merged[key] = value
+	end
+	merged.TextSize = textSize
+	local tag = UIKit.Pill(string.format("%s x%d", mutation.Name, mutation.Multiplier), mutation.Color, merged)
+	-- Forme ronde : une mutation ne se confond pas avec une rareté de la même couleur
+	local corner = tag:FindFirstChildOfClass("UICorner")
+	if corner then
+		corner.CornerRadius = UDim.new(0.5, 0)
+	end
+	local sequence = Widgets.MutationGradient(mutation)
+	local gradient = tag:FindFirstChildOfClass("UIGradient")
+	if sequence and gradient then
+		gradient.Color = sequence
+		gradient.Rotation = 0
+	end
 	return tag
 end
 
@@ -110,11 +107,7 @@ end
 function Widgets.RarityTile(icon: string, rarityId: string, size: number, props: { [string]: any }?): Frame
 	local tile = UIKit.IconTile(icon, Widgets.RarityColor(rarityId), size, props)
 	if rarityId == "Secret" then
-		local gradient = tile:FindFirstChildOfClass("UIGradient")
-		if gradient then
-			gradient.Color = Widgets.Rainbow
-			gradient.Rotation = 45
-		end
+		rainbow(tile, 45)
 	end
 	return tile
 end
@@ -135,28 +128,27 @@ function Widgets.Row(props: { [string]: any }, padding: number?, hAlign: Enum.Ho
 	return row
 end
 
--- Titre de section dans une liste (gros texte blanc + filet bleu nuit dessous)
+-- Titre de section dans une liste : texte foncé + filet clair dessous
 function Widgets.Section(parent: Instance, text: string, order: number): TextLabel
-	local label = UIKit.Text({
+	local label = UIKit.Label({
 		Name = "Section",
 		Text = text,
-		TextSize = 23,
+		TextSize = 20,
 		TextWrapped = false,
-		Size = UDim2.new(1, 0, 0, 36),
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Size = UDim2.new(1, 0, 0, 34),
 		LayoutOrder = order,
-		Stroke = 2.8,
 		Parent = parent,
 	})
-	local rule = UIKit.New("Frame", {
+	UIKit.New("Frame", {
 		Name = "Rule",
-		BackgroundColor3 = Theme.Inset,
-		BackgroundTransparency = 0.2,
+		BackgroundColor3 = Theme.CardStroke,
+		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 0, 1, 0),
-		Size = UDim2.new(1, 0, 0, 4),
+		Size = UDim2.new(1, 0, 0, 2),
 		Parent = label,
 	})
-	UIKit.Round(rule)
 	return label
 end
 
@@ -169,19 +161,32 @@ function Widgets.Empty(parent: Instance, icon: string, text: string, order: numb
 		LayoutOrder = order or 999,
 		Parent = parent,
 	})
-	UIKit.IconCircle(icon, Theme.Palette.Dark[1], 92, {
+	local circle = UIKit.New("Frame", {
+		Name = "Icon",
+		BackgroundColor3 = Theme.Chip,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 12),
+		Size = UDim2.fromOffset(88, 88),
 		Parent = holder,
+	})
+	UIKit.Round(circle)
+	UIKit.Text({
+		Name = "Glyph",
+		Text = icon,
+		TextSize = 44,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextWrapped = false,
+		Size = UDim2.fromScale(1, 1),
+		Stroke = 0,
+		Parent = circle,
 	})
 	UIKit.Body({
 		Text = text,
-		TextSize = 20,
-		TextColor3 = Theme.Text,
+		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(20, 118),
-		Size = UDim2.new(1, -40, 0, 60),
-		Stroke = 1.8,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		Position = UDim2.fromOffset(40, 116),
+		Size = UDim2.new(1, -80, 0, 56),
 		Parent = holder,
 	})
 	return holder
@@ -190,7 +195,7 @@ end
 -- Avatar rond d'un joueur (miniature Roblox, aucun asset à publier)
 function Widgets.Avatar(userId: number, size: number, props: { [string]: any }?): Frame
 	local frame = UIKit.New("Frame", {
-		BackgroundColor3 = Theme.Inset,
+		BackgroundColor3 = Theme.Chip,
 		Size = UDim2.fromOffset(size, size),
 	})
 	for key, value in pairs(props or {}) do
@@ -199,7 +204,7 @@ function Widgets.Avatar(userId: number, size: number, props: { [string]: any }?)
 		end
 	end
 	UIKit.Round(frame)
-	UIKit.Stroke(frame, 3)
+	UIKit.Stroke(frame, 2.5)
 	local image = UIKit.New("ImageLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
@@ -214,11 +219,20 @@ function Widgets.Avatar(userId: number, size: number, props: { [string]: any }?)
 	return frame
 end
 
--- Change le texte d'une étiquette créée par UIKit.Pill
+-- Change le texte d'une étiquette créée par UIKit.Pill ou UIKit.Chip
 function Widgets.SetPillText(pill: Frame, text: string)
 	local label = pill:FindFirstChild("Text")
 	if label and label:IsA("TextLabel") then
 		label.Text = text
+	end
+end
+
+-- Change la couleur d'une pastille créée par UIKit.Pill
+function Widgets.SetPillColor(pill: Frame, color: Color3)
+	local gradient = pill:FindFirstChildOfClass("UIGradient")
+	if gradient then
+		gradient.Color = ColorSequence.new(Theme.Lighten(color, 0.14), color)
+		gradient.Rotation = 90
 	end
 end
 

@@ -2,6 +2,7 @@
 	LeaderboardPanel : classement global (argent total gagné, vols réussis).
 ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
@@ -14,14 +15,13 @@ local Widgets = require(script.Parent.Parent.Widgets)
 local LeaderboardPanel = {}
 LeaderboardPanel.Title = "Classement global"
 LeaderboardPanel.Icon = "🏆"
-LeaderboardPanel.Color = "Royal"
 
 local MEDALS = { "🥇", "🥈", "🥉" }
--- Or, argent, bronze : assez soutenus pour que les noms blancs restent lisibles
+-- Or, argent, bronze : fond très clair teinté et contour de la couleur de la médaille
 local MEDAL_COLORS = {
-	Color3.fromRGB(255, 190, 0),
-	Color3.fromRGB(122, 142, 188),
-	Color3.fromRGB(214, 104, 30),
+	Color3.fromRGB(255, 190, 30),
+	Color3.fromRGB(160, 172, 196),
+	Color3.fromRGB(214, 122, 56),
 }
 
 function LeaderboardPanel.Create(content: Frame, ctx)
@@ -29,12 +29,13 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 	local cached = nil
 	local self = {} :: any
 
-	local tabs = Widgets.Row({ Size = UDim2.new(1, 0, 0, 56), Parent = content }, 10)
+	-- Onglets (onglet actif : violet de marque)
+	local tabs = Widgets.Row({ Size = UDim2.new(1, 0, 0, 44), Parent = content }, 8)
 	local moneyTab = UIKit.Button({
-		Text = "💰 ARGENT TOTAL",
-		Color = "Green",
-		TextSize = 21,
-		Size = UDim2.new(0.5, -5, 0, 54),
+		Text = "💰 Argent total",
+		Color = "Brand",
+		TextSize = 19,
+		Size = UDim2.new(0.5, -4, 0, 44),
 		LayoutOrder = 1,
 		Parent = tabs,
 		OnClick = function()
@@ -43,10 +44,10 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 		end,
 	})
 	local stealsTab = UIKit.Button({
-		Text = "🦹 VOLS RÉUSSIS",
-		Color = "Dark",
-		TextSize = 21,
-		Size = UDim2.new(0.5, -5, 0, 54),
+		Text = "🦹 Vols réussis",
+		Color = "White",
+		TextSize = 19,
+		Size = UDim2.new(0.5, -4, 0, 44),
 		LayoutOrder = 2,
 		Parent = tabs,
 		OnClick = function()
@@ -55,11 +56,11 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 		end,
 	})
 
-	local list = UIKit.ScrollList(content, { Position = UDim2.fromOffset(0, 68), Size = UDim2.new(1, 0, 1, -68) })
+	local list = UIKit.ScrollList(content, UIKit.ScrollArea(56))
 
 	function self.Refresh()
-		moneyTab:SetColor(if mode == "Money" then "Green" else "Dark")
-		stealsTab:SetColor(if mode == "Steals" then "Red" else "Dark")
+		moneyTab:SetColor(if mode == "Money" then "Brand" else "White")
+		stealsTab:SetColor(if mode == "Steals" then "Brand" else "White")
 		UIKit.ClearChildren(list)
 		local entries = cached and cached[mode]
 		if not entries or #entries == 0 then
@@ -67,55 +68,59 @@ function LeaderboardPanel.Create(content: Frame, ctx)
 			return
 		end
 		for _, entry in entries do
-			local medalColor = MEDAL_COLORS[entry.Rank]
-			local card =
-				UIKit.Card({ Size = UDim2.new(1, 0, 0, 72), LayoutOrder = entry.Rank, Parent = list }, medalColor)
+			-- Podium teinté ; la ligne du joueur local est sélectionnée (violet de marque)
+			local isMe = entry.UserId == Players.LocalPlayer.UserId
+			local tint = if isMe then Theme.Brand else MEDAL_COLORS[entry.Rank]
+			local card = UIKit.Card({ Size = UDim2.new(1, 0, 0, 64), LayoutOrder = entry.Rank, Parent = list }, tint)
 			if MEDALS[entry.Rank] then
-				UIKit.IconCircle(MEDALS[entry.Rank], medalColor, 54, {
-					AnchorPoint = Vector2.new(0, 0.5),
-					Position = UDim2.new(0, 10, 0.5, 0),
-					Parent = card,
-				})
-			else
 				UIKit.Text({
-					Text = "#" .. entry.Rank,
-					TextSize = 26,
+					Text = MEDALS[entry.Rank],
+					TextSize = 32,
 					TextXAlignment = Enum.TextXAlignment.Center,
 					TextWrapped = false,
 					AnchorPoint = Vector2.new(0, 0.5),
-					Position = UDim2.new(0, 10, 0.5, 0),
-					Size = UDim2.fromOffset(54, 40),
-					Stroke = 3,
+					Position = UDim2.new(0, 12, 0.5, 0),
+					Size = UDim2.fromOffset(44, 40),
+					Stroke = 0,
+					Parent = card,
+				})
+			else
+				UIKit.Label({
+					Text = "#" .. entry.Rank,
+					TextSize = 20,
+					TextColor3 = Theme.TextMuted,
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextWrapped = false,
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 12, 0.5, 0),
+					Size = UDim2.fromOffset(44, 32),
 					Fit = true,
 					Parent = card,
 				})
 			end
 			Widgets.Avatar(
 				entry.UserId,
-				52,
-				{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 76, 0.5, 0), Parent = card }
+				44,
+				{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 68, 0.5, 0), Parent = card }
 			)
-			UIKit.Body({
+			UIKit.Label({
 				Text = entry.Name,
-				TextSize = 22,
-				TextColor3 = Theme.Text,
+				TextSize = 19,
 				TextWrapped = false,
 				TextTruncate = Enum.TextTruncate.AtEnd,
-				Position = UDim2.fromOffset(140, 0),
+				Position = UDim2.fromOffset(126, 0),
 				Size = UDim2.new(1, -350, 1, 0),
-				Stroke = 2,
 				Parent = card,
 			})
-			UIKit.Text({
+			UIKit.Label({
 				Text = if mode == "Money" then Format.Money(entry.Value) else "🦹 " .. tostring(entry.Value),
-				TextSize = 27,
-				TextColor3 = if mode == "Money" then Theme.Money else Color3.fromRGB(255, 120, 120),
+				TextSize = 21,
+				TextColor3 = if mode == "Money" then Theme.MoneyText else Theme.DangerText,
 				TextXAlignment = Enum.TextXAlignment.Right,
 				TextWrapped = false,
 				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -16, 0.5, 0),
-				Size = UDim2.fromOffset(200, 36),
-				Stroke = 3,
+				Position = UDim2.new(1, -18, 0.5, 0),
+				Size = UDim2.fromOffset(200, 30),
 				Fit = true,
 				Parent = card,
 			})
